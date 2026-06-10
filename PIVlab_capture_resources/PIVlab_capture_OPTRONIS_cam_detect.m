@@ -10,9 +10,10 @@ try
     warning on
     warning('off','imaq:gentl:hardwareTriggerTriggerModeOff'); %trigger property of OPTRONIS cannot be set in Matlab.
     warning('off','MATLAB:JavaEDTAutoDelegation'); %strange warning
+    warning('off','imaq:gentl:noSupportedPixelFormat')
     imaqreset
 catch
-    errordlg('Error: Image Acquisition Toolbox not available! This camera needs the image acquisition toolbox.','Error!','modal')
+    gui.custom_msgbox('error',getappdata(0,'hgui'),'Error','Error: Image Acquisition Toolbox not available! This camera needs the image acquisition toolbox.','modal');
     disp('Error: Image Acquisition Toolbox not available! This camera needs the image acquisition toolbox.')
     if ~isdeployed
             end
@@ -30,7 +31,7 @@ end
 if found_correct_adaptor~=1
 	disp('ERROR: gentl adaptor not found. Please install the GenICam / GenTL support package from here:')
 	disp('https://de.mathworks.com/matlabcentral/fileexchange/45180')
-    errordlg({'ERROR: gentl adaptor not found. Please got to Matlab file exchange and search for "GenICam Interface " to install it.' 'Link: https://de.mathworks.com/matlabcentral/fileexchange/45180'},'Error, support package missing','modal')
+    gui.custom_msgbox('error',getappdata(0,'hgui'),'Error, support package missing',{'ERROR: gentl adaptor not found. Please got to Matlab file exchange and search for "GenICam Interface " to install it.' 'Link: https://de.mathworks.com/matlabcentral/fileexchange/45180'},'modal');
 end
 
 try
@@ -43,7 +44,7 @@ try
     end
     OPTRONIS_name = info.DeviceInfo(CamID).DeviceName;
 catch
-    errordlg('Error: Camera not found! Is it connected?','Error!','modal')
+    gui.custom_msgbox('error',getappdata(0,'hgui'),'Error','Error: Camera not found! Is it connected?','modal');
 end
 
 if contains(OPTRONIS_name,'Cyclone-2-2000-M')
@@ -54,11 +55,12 @@ elseif contains (OPTRONIS_name,'Cyclone-25-150-M')
     camera_sub_type='Cyclone-25-150-M';
 else
     disp (OPTRONIS_name)
-    disp('--> camera type unknown!')
+    disp('--> No cam detected on Euresys grabber')
     camera_sub_type='unknown';
 end
 disp(['Found camera: ' camera_sub_type])
-Kinder=get(gca,'Children');
+target_axis=gui.retr('pivlab_axis');
+Kinder=get(target_axis,'Children');
 for k=1:size(Kinder,1)
     if isprop(Kinder(k),'CData')
         img_size1=size(Kinder(k).CData,1);
@@ -67,5 +69,6 @@ for k=1:size(Kinder,1)
     end
 end
 if contains(OPTRONIS_name,'Cyclone-2-2000-M') || contains (OPTRONIS_name,'Cyclone-1HS-3500-M') || contains (OPTRONIS_name,'Cyclone-25-150-M')
-    text(img_size2*0.75,img_size1*0.95,['Connected to: '  camera_sub_type],'tag','cam_info_box','Color','black','BackgroundColor','green','VerticalAlignment','bottom','interpreter','none');
+    text(img_size2*0.75,img_size1*0.95,['Connected to: '  camera_sub_type ' via Euresys grabber.'],'tag','cam_info_box','Color','black','BackgroundColor','green','VerticalAlignment','bottom','interpreter','none');
+    drawnow;
 end

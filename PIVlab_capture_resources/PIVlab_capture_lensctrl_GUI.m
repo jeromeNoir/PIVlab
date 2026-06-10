@@ -440,7 +440,7 @@ end
 
 function calibrate_level_Callback(caller,~)
 do_calib=0;
-answer = questdlg({'Please level the camera (using a precision spirit level) and press "Start".' ' ' 'The sensor is factory calibrated, so manual calibration is usually not necessary.'}, 'Level calibration', 'Start','Cancel','Start');
+answer = gui.custom_msgbox('quest',getappdata(0,'hgui'),'Level calibration',{'Please level the camera (using a precision spirit level) and press "Start".' ' ' 'The sensor is factory calibrated, so manual calibration is usually not necessary.'},'modal',{'Start','Cancel'},'Start');
 switch answer
 	case 'Start'
 		do_calib=1;
@@ -490,7 +490,7 @@ if do_calib==1
 		stdRoll=std(Roll)/100;
 		stdPitch=std(Pitch)/100;
 		if (stdRoll + stdPitch) > 0.1
-			msgbox('Camera was shaking too much!','modal')
+            gui.custom_msgbox('error',getappdata(0,'hgui'),'Error','Camera was shaking too much!','modal');
 		else
 			set(handles.calibrate,'Background',[0 1 0.1]);
 			set(handles.calibrate,'String','Calibration ok!');drawnow;pause(0.5)

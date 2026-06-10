@@ -5,13 +5,16 @@ if strcmp(camera_type,'chronos')
 elseif strcmp(camera_type,'OPTOcam')
     PIVlab_capture_OPTOcam_settings_GUI
 elseif strcmp(camera_type,'OPTRONIS')
-    if ~verLessThan('matlab','25')
+    camera_sub_type=gui.retr('camera_sub_type');
+    if endsWith(camera_sub_type, '-bitflow')
+        PIVlab_capture_OPTRONIS_bitflow_settings_GUI
+    elseif ~verLessThan('matlab','25')
         PIVlab_capture_OPTRONIS_settings_GUI
     else
-        uiwait(msgbox('OPTRONIS cameras require at least Matlab R2025a to set bit depth and gain.','modal'))
+        gui.custom_msgbox('warn',getappdata(0,'hgui'),'Newer Matlab required','OPTRONIS cameras require at least Matlab R2025a to set bit depth and gain.','modal');
     end
-elseif strcmp(camera_type,'pco_panda')
+elseif strcmp(camera_type,'pco_panda') || strcmp(camera_type,'pco_edge26')
     PIVlab_capture_panda_settings_GUI
 else
-    uiwait(msgbox('Not available for the selected camera model.','modal'))
+    gui.custom_msgbox('error',getappdata(0,'hgui'),'Not available','Not available for the selected camera model.','modal');
 end

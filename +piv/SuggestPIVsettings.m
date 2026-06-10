@@ -4,7 +4,7 @@ selected=2*floor(get(handles.fileselector, 'value'))-1;
 filepath=gui.retr('filepath');
 ok=gui.checksettings;
 if ok==1
-	uiwait(msgbox({'Please select a rectangle';'that encloses the area that';'you want to analyze.'},'Suggestion for PIV settings','modal'));
+	gui.custom_msgbox('msg',getappdata(0,'hgui'),'Suggestion for PIV settings',{'Please select a rectangle';'that encloses the area that';'you want to analyze.'},'modal',{'OK'},'OK');
 	regionOfInterest = images.roi.Rectangle;
 	%regionOfInterest.EdgeAlpha=0.75;
 	regionOfInterest.LabelVisible = 'on';
@@ -33,7 +33,7 @@ if ok==1
 
 	if numel(roirect) == 4
 		if roirect(3) < 64 || roirect(4)< 64
-			uiwait(msgbox({'The rectangle you selected is too small.';'Please select a larger rectangle.';'(should be larger than 64 x 64 pixels)'},'Suggestion for PIV settings','modal'));
+			gui.custom_msgbox('warn',getappdata(0,'hgui'),'Suggestion for PIV settings',{'The rectangle you selected is too small.';'Please select a larger rectangle.';'(should be larger than 64 x 64 pixels)'},'modal');
 		else
 			text(50,50,'Please wait...','color','r','fontsize',14, 'BackgroundColor', 'k','tag','hint');
 			drawnow
@@ -56,13 +56,19 @@ if ok==1
 			minintens = stretcher(1);
 			maxintens = stretcher(2);
 
-			A = preproc.PIVlab_preproc (A,[],clahe, clahesize,highp,highpsize,intenscap,wienerwurst,wienerwurstsize,minintens,maxintens);
+			A = preproc.PIVlab_preproc( ...
+				in=A, roirect=[], clahe=clahe, clahesize=clahesize, highp=highp, ...
+				highpsize=highpsize, intenscap=intenscap, wienerwurst=wienerwurst, ...
+				wienerwurstsize=wienerwurstsize, minintens=minintens, maxintens=maxintens);
 
 			stretcher = stretchlim(B);
 			minintens = stretcher(1);
 			maxintens = stretcher(2);
 
-			B = preproc.PIVlab_preproc (B,[],clahe, clahesize,highp,highpsize,intenscap,wienerwurst,wienerwurstsize,minintens,maxintens);
+			B = preproc.PIVlab_preproc( ...
+				in=B, roirect=[], clahe=clahe, clahesize=clahesize, highp=highp, ...
+				highpsize=highpsize, intenscap=intenscap, wienerwurst=wienerwurst, ...
+				wienerwurstsize=wienerwurstsize, minintens=minintens, maxintens=maxintens);
 
 			interrogationarea=round(min(size(A))/4);
 			if interrogationarea > 128
@@ -72,7 +78,12 @@ if ok==1
 			if step < 6
 				step=6;
 			end
-			[x, y, u, v, typevector,~,correlation_matrices] = piv.piv_FFTmulti (A,B,interrogationarea, step,1,[],[],1,32,16,16,'*linear',1,0,0,do_correlation_matrices,0,0);
+			[x, y, u, v, typevector,~,correlation_matrices] = piv.piv_FFTmulti( ...
+				image1=A, image2=B, interrogationarea=interrogationarea, step=step, ...
+				subpixfinder=1, mask_inpt=[], roi_inpt=[], passes=1, int2=32, int3=16, ...
+				int4=16, imdeform='*linear', repeat=1, mask_auto=0, ...
+				do_linear_correlation=0, do_correlation_matrices=do_correlation_matrices, ...
+				repeat_last_pass=0, delta_diff_min=0);
 			u=medfilt2(u);
 			v=medfilt2(v);
 			u=misc.inpaint_nans(u,4);
@@ -111,14 +122,20 @@ if ok==1
 			recommendation = median([recommended1 recommended2 recommended3]);
 			if get (handles.algorithm_selection,'Value')==4 %wOFV algorithm)
 				% use the PIV recommendation to perform another PIV analysis (with recommended settings and higher resolution) and use that to estimate wOFV settings...
-				[x, y, u, v, ~,~,~] = piv.piv_FFTmulti (A,B,double(recommendation)*2, double(recommendation),1,[],[],2,double(recommendation),16,16,'*linear',0,0,0,0,0,0);
-				[u,v] = postproc.PIVlab_postproc (u,v,[],[], [], 1,6,1,3); %validate results
+				[x, y, u, v, ~,~,~] = piv.piv_FFTmulti( ...
+					image1=A, image2=B, interrogationarea=double(recommendation)*2, ...
+					step=double(recommendation), subpixfinder=1, mask_inpt=[], roi_inpt=[], ...
+					passes=2, int2=double(recommendation), int3=16, int4=16, ...
+					imdeform='*linear', repeat=0, mask_auto=0, do_linear_correlation=0, ...
+					do_correlation_matrices=0, repeat_last_pass=0, delta_diff_min=0);
+				[u,v] = postproc.PIVlab_postproc( ...
+					u=u, v=v, valid_vel=[], do_stdev_check=1, stdthresh=6, ...
+					do_local_median=1, neigh_thresh=3); %validate results
 				u=misc.inpaint_nans(u,4); %fill holes
 				v=misc.inpaint_nans(v,4);
 				[EtaPred,PatchSizePred] = wOFV.PredictSmoothnessCoefficient(x,y,u,v,A,B);
 				gui.toolsavailable(1)
-				uiwait(msgbox({'These are the recommendations for wOFV parameters:';[''];['Smoothness (eta): ' num2str(EtaPred)];['Patch size: ' num2str(PatchSizePred)];[''];'The settings are updated automatically.'},'Suggestion for wOFV settings','modal'));
-
+                gui.custom_msgbox('msg',getappdata(0,'hgui'),'Suggestion for wOFV settings',{'These are the recommendations for wOFV parameters:';[''];['Smoothness (eta): ' num2str(EtaPred)];['Patch size: ' num2str(PatchSizePred)];[''];'The settings are updated automatically.'},'modal',{'OK'},'OK');
 				set (handles.ofv_median,'Value', 1); %revert to default?
 				set(handles.ofv_pyramid_levels,'Value', 3); %revert to default?
 				set (handles.ofv_eta,'String', num2str(EtaPred)); %predicted value
@@ -146,7 +163,7 @@ if ok==1
 				delete(findobj('tag','hint'));
 			else
 				%[recommended1 recommended2 recommended3]
-				uiwait(msgbox({'These are the recommendations for the size of the final interrogation area:';[''];['Based on the displacements: ' num2str(recommended1) ' pixels'];['Based on the particle count: ' num2str(recommended2) ' pixels'];['Based on practical experience: ' num2str(recommended3) ' pixels'];[''];'The settings are automatically updated with the median of the recommendation.'},'Suggestion for PIV settings','modal'));
+				gui.custom_msgbox('msg',getappdata(0,'hgui'),'Suggestion for PIV settings',{'These are the recommendations for the size of the final interrogation area:';[''];['Based on the displacements: ' num2str(recommended1) ' pixels'];['Based on the particle count: ' num2str(recommended2) ' pixels'];['Based on practical experience: ' num2str(recommended3) ' pixels'];[''];'The settings are automatically updated with the median of the recommendation.'},'modal',{'OK'},'OK');
 				set(handles.algorithm_selection,'Value', 1)
 				set (handles.intarea, 'String', recommendation*2); %two times the minimum recommendation
 				set (handles.step, 'String', recommendation);

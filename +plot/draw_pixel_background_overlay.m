@@ -9,6 +9,9 @@ end
 image_display_type=get(handles.displ_image,'Value'); %1 = piv image, 2= black, 3 = white
 [currentimage,~]=import.get_img(selected);
 if size(currentimage,3)>1 % color image
+    if size(currentimage,3)>3
+        currentimage=currentimage(:,:,1:3); %Chronos prototype has 4channels (all identical...?)
+    end
 	currentimage=rgb2gray(currentimage); %convert to gray, always.
 end
 
@@ -23,15 +26,17 @@ elseif image_display_type==2 %black
 elseif image_display_type==3 %white
 	image(cat(3, (currentimage+1)*inf, (currentimage+1)*inf, (currentimage+1)*inf), 'parent',target_axis, 'cdatamapping', 'scaled');
 end
-colormap('gray');
-axis image
+%disp(['Size of the image currently being display via sliderdisp: ' num2str(size(currentimage))])
+
+colormap(target_axis,'gray');
+axis(target_axis,'image');
 
 derived=gui.retr('derived');
 
 if size(derived,2)>=(currentframe+1)/2 && displaywhat > 1 && numel(derived{displaywhat-1,(currentframe+1)/2})>0 %derived parameters requested and existant
 else
 	if get(handles.derivchoice,'Value')>1
-		text(15,15,'This parameter needs to be calculated for this frame first. Go to Plot -> Spatial: Derive Parameters and click "Apply to all frames".','color','r','fontsize',9, 'BackgroundColor', 'k', 'tag', 'derivhint')
+		text(target_axis,15,15,'This parameter needs to be calculated for this frame first. Go to Plot -> Spatial: Derive Parameters and click "Apply to all frames".','color','r','fontsize',9, 'BackgroundColor', 'k', 'tag', 'derivhint')
 	end
 end
 
@@ -67,32 +72,47 @@ if ~isempty(derived) && size(derived,2)>=(currentframe+1)/2 && displaywhat > 1  
 	end
 
 	%set colormap
-	if displaywhat ~=10 %10 is LIC
-		avail_maps=get(handles.colormap_choice,'string');
-		selected_index=get(handles.colormap_choice,'value');
-		if selected_index == 4 %HochschuleBremen map
-			load(fullfile('+plot','hsbmap.mat'),'hsb');
-			MAP = colormap(hsb);
-		elseif selected_index== 1 %parula
-			load(fullfile('+plot','parula.mat'),'parula')
-			MAP = colormap (parula);
-			elseif selected_index== 16 %plasma
-			load(fullfile('+plot','plasma.mat'),'plasma')
-			MAP = colormap (plasma);
-		else
-			MAP = colormap(avail_maps{selected_index});
-		end
-		%adjust colormap steps
-		cmap = MAP;
-		colormap_steps_list=get(handles.colormap_steps,'String');
-		colormap_steps_value=get(handles.colormap_steps,'Value');
-		colormap_steps=str2double(colormap_steps_list{colormap_steps_value});
-		cmap_new=interp1(1:size(cmap,1),cmap,linspace(1,size(cmap,1),colormap_steps));
-		%colormap(cmap_new);
-		MAP = colormap(cmap_new);
-	else %LIC can only be gray
-		MAP = colormap('gray');
-	end
+	target_fig = ancestor(target_axis,'figure');
+    if displaywhat ~=10 %10 is LIC
+        avail_maps=get(handles.colormap_choice,'string');
+        selected_index=get(handles.colormap_choice,'value');
+        if selected_index == 4 %HochschuleBremen map
+            try
+                load(fullfile('+plot','hsbmap.mat'),'hsb');
+                MAP = colormap(target_fig,hsb);
+            catch
+                disp(['hsbmap.mat not found in ' fullfile('+plot','hsbmap.mat')])
+                MAP=colormap(target_fig,"parula");
+            end
+        elseif selected_index== 1 %parula
+            try
+                load(fullfile('+plot','parula.mat'),'parula')
+                MAP = colormap(target_fig,parula);
+            catch
+                disp(['parula.mat not found in ' fullfile('+plot','parula.mat')])
+                MAP=colormap(target_fig,"parula");
+            end
+        elseif selected_index== 16 %plasma
+            try
+                load(fullfile('+plot','plasma.mat'),'plasma')
+                MAP = colormap(target_fig,plasma);
+            catch
+                disp(['plasma.mat not found in ' fullfile('+plot','plasma.mat')])
+                MAP=colormap(target_fig,"parula");
+            end
+        else
+            MAP = colormap(target_fig,avail_maps{selected_index});
+        end
+        %adjust colormap steps
+        cmap = MAP;
+        colormap_steps_list=get(handles.colormap_steps,'String');
+        colormap_steps_value=get(handles.colormap_steps,'Value');
+        colormap_steps=str2double(colormap_steps_list{colormap_steps_value});
+        cmap_new=interp1(1:size(cmap,1),cmap,linspace(1,size(cmap,1),colormap_steps));
+        MAP = colormap(target_fig,cmap_new);
+    else %LIC can only be gray
+        MAP = colormap(target_fig,'gray');
+    end
 
 	currentimage = plot.rescale_maps(currentimage,is_it_vector_direction);
 
@@ -149,7 +169,7 @@ if ~isempty(derived) && size(derived,2)>=(currentframe+1)/2 && displaywhat > 1  
 	else
 		alpha_ROI_map(:)=1;
 	end
-	hold on;
+	hold(target_axis,'on');
 	alphamap=derivative_alpha.*alpha_pixel_map.*alpha_ROI_map;
 	alphamap(alphamap>1)=1;
 	alphamap(alphamap<0)=0;
@@ -157,7 +177,7 @@ if ~isempty(derived) && size(derived,2)>=(currentframe+1)/2 && displaywhat > 1  
 	alphamap(1,1)=0;
 	alphamap(end,end)=1;
 	image(currentimage, 'parent',target_axis, 'cdatamapping', 'direct','AlphaData',alphamap,'AlphaDataMapping','scaled');
-	hold off;
+	hold(target_axis,'off');
 
 	%% colorbar
 	if get(handles.colorbarpos,'value')~=1
@@ -198,6 +218,17 @@ if ~isempty(derived) && size(derived,2)>=(currentframe+1)/2 && displaywhat > 1  
 			xlabel(coloobj,name{gui.retr('displaywhat')},'fontsize',12,'fontweight','bold'); %11
 		end
 
+        %do not modify ticklocations, only the label
+%{
+Tick=coloobj.Ticks;
+ticklabels = minscale_adjusted + Tick/max(Tick) * (maxscale_adjusted-minscale_adjusted)
+ticklabels_string=num2str(ticklabels(:),'%0.3f');
+coloobj.TickLabels =ticklabels_string;
+%}
+        %pause(2);
+        %bar_width=coloobj.Position(3);
+        %coloobj.Position(3)=bar_width*0.95;
+        %coloobj.Position(1)=coloobj.Position(1) + bar_width*0.05*0.5;
 		tickamount=min([colormap_steps 8])+1; % depends on the amount of colormap steps
 		coloobj.Ticks=linspace(0,colormap_steps,tickamount);
 		ticklabels=linspace(minscale_adjusted,maxscale_adjusted,tickamount);
@@ -223,7 +254,7 @@ if 	render_mask==1 && get(handles.mask_edit_mode,'Value')==2 %mask preview mode
 	if skip_mask_pixels<1
 		skip_mask_pixels=1;
 	end
-	hold on;
+	hold(target_axis,'on');
 	alphamapmask=converted_mask(1:skip_mask_pixels:end,1:skip_mask_pixels:end)*(1-(str2double(get(handles.masktransp,'String'))/100));
 	alphamapmask(alphamapmask>1)=1;
 	alphamapmask(alphamapmask<0)=0;
@@ -231,6 +262,6 @@ if 	render_mask==1 && get(handles.mask_edit_mode,'Value')==2 %mask preview mode
 	alphamapmask(1,1)=0;
 	alphamapmask(end,end)=1;
 	image(x,y,cat(3, converted_mask(1:skip_mask_pixels:end,1:skip_mask_pixels:end)*0.7, converted_mask(1:skip_mask_pixels:end,1:skip_mask_pixels:end)*0.1, converted_mask(1:skip_mask_pixels:end,1:skip_mask_pixels:end)*0.1), 'parent',target_axis, 'cdatamapping', 'direct','AlphaData',alphamapmask,'AlphaDataMapping','scaled');
-	hold off
+	hold(target_axis,'off');
 end
 

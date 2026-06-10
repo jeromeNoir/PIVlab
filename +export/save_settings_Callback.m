@@ -50,15 +50,10 @@ realdist=get(handles.realdist, 'string');
 time_inp=get(handles.time_inp, 'string');
 
 nthvect=get(handles.nthvect, 'string');
-validr=get(handles.validr,'string');
-validg=get(handles.validg,'string');
-validb=get(handles.validb,'string');
-validdr=get(handles.validdr,'string');
-validdg=get(handles.validdg,'string');
-validdb=get(handles.validdb,'string');
-interpr=get(handles.interpr,'string');
-interpg=get(handles.interpg,'string');
-interpb=get(handles.interpb,'string');
+valid_color_idx      = get(handles.valid_color,      'Value');
+secondpeak_color_idx = get(handles.secondpeak_color, 'Value');
+interp_color_idx     = get(handles.interp_color,     'Value');
+deriv_color_idx      = get(handles.deriv_color,      'Value');
 
 calxy=gui.retr('calxy');
 calu=gui.retr('calu');calv=gui.retr('calv');
@@ -117,6 +112,23 @@ if isempty(pointscali)
 	clear pointscali
 end
 
+%new settings for camera calibration (v3.13)
+calib_boardtype=handles.calib_boardtype.Value; %#ok<*NASGU>
+calib_origincolor=handles.calib_origincolor.Value;
+calib_rows=handles.calib_rows.String;
+calib_columns=handles.calib_columns.String;
+calib_checkersize=handles.calib_checkersize.String;
+calib_markersize=handles.calib_markersize.String;
+calib_dolivedetect=handles.calib_dolivedetect.Value;
+calib_viewtype=handles.calib_viewtype.Value;
+calib_usecalibration=handles.calib_usecalibration.Value;
+calib_use_tilted_model=handles.calib_use_tilted_model.Value;
+calib_userectification=handles.calib_userectification.Value;
+calib_upscale=handles.calib_upscale.Value;
+
+%%Stereo-PIV related settings
+stereomode=gui.retr('stereomode');
+
 if ispc==1
 	[FileName,PathName] = uiputfile('*.mat','Save current settings as...',['PIVlab_set_' getenv('USERNAME') '.mat']);
 else
@@ -126,6 +138,8 @@ else
 		[FileName,PathName] = uiputfile('*.mat','Save current settings as...','PIVlab_set.mat');
 	end
 end
+
+extrapolate_border=get(handles.extrapolate_border,'value');
 
 clear handles hObject eventdata
 if ~isequal(FileName,0)

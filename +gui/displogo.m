@@ -1,4 +1,8 @@
 function displogo(~)
+cam_info=findobj('tag','cam_info_box'); %if information was shown on the detected camera, then save this information
+if ~isempty(cam_info)
+    props = get(cam_info);
+end
 try
     [logoimg, ~, alphachannel] = imread(fullfile('images','PIVlablogo.png'));
 catch
@@ -6,27 +10,34 @@ catch
     cd (filepath); %if current directory is not where PIVlab_GUI.m is located, then change directory.
     [logoimg, ~, alphachannel] = imread(fullfile('images','PIVlablogo.png'));
 end
-
+target_axis=gui.retr('pivlab_axis');
 try
-    pivlab_axis=gui.retr('pivlab_axis');
-    image(logoimg, 'parent', pivlab_axis,'interpolation','bilinear', 'AlphaData', alphachannel,'AlphaDataMapping','scaled');
+    image(logoimg, 'parent', target_axis,'interpolation','bilinear', 'AlphaData', alphachannel,'AlphaDataMapping','scaled');
 catch
-    pivlab_axis=gui.retr('pivlab_axis');
-    image(logoimg, 'parent', pivlab_axis, 'AlphaData', alphachannel);
+    image(logoimg, 'parent', target_axis, 'AlphaData', alphachannel);
 end
-set(gca, 'xcolor', 'none', 'ycolor', 'none') ;
-set(gca,'Color','none')
-axis image;
-set(gca,'ytick',[])
-set(gca,'xtick',[])
-set(gca, 'xlim', [1 size(logoimg,2)]);
-set(gca, 'ylim', [1 size(logoimg,1)]);
 
-set(gca, 'ydir', 'reverse'); %750%582
-text (1025,800,['version: ' gui.retr('PIVver')], 'fontsize', 10,'horizontalalignment','right');
-text (1025,800,['   ' sprintf('\n') gui.retr('update_msg')], 'fontsize', 10,'fontangle','italic','horizontalalignment','right','Color',gui.retr('update_msg_color'),'verticalalignment','top');
+set(target_axis, 'xcolor', 'none', 'ycolor', 'none') ;
+set(target_axis,'Color','none')
+set(target_axis, 'DataAspectRatio', [1 1 1], 'PlotBoxAspectRatioMode', 'auto');
+set(target_axis,'ytick',[])
+set(target_axis,'xtick',[])
+set(target_axis, 'xlim', [1 size(logoimg,2)]);
+set(target_axis, 'ylim', [1 size(logoimg,1)]);
+set(target_axis, 'ydir', 'reverse'); %750%582
+text (target_axis,1025,800,['version: ' gui.retr('PIVver')], 'fontsize', 10,'horizontalalignment','right');
+text (target_axis,1025,800,['   ' sprintf('\n') gui.retr('update_msg')], 'fontsize', 10,'fontangle','italic','horizontalalignment','right','Color',gui.retr('update_msg_color'),'verticalalignment','top');
 imgproctoolbox=gui.retr('imgproctoolbox');
 gui.put('imgproctoolbox',[]);
 if imgproctoolbox==0
-    text (90,200,'Image processing toolbox not found!', 'fontsize', 16, 'color', [1 0 0], 'backgroundcolor', [0 0 0]);
+    text (target_axis,90,200,'Image processing toolbox not found!', 'fontsize', 16, 'color', [1 0 0], 'backgroundcolor', [0 0 0]);
+end
+if ~isempty(cam_info) %display information on detected camerea again
+    new_text = text( ...
+        props.Position(1), ...
+        props.Position(2), ...
+        props.String, ...
+        'Parent', props.Parent,'color',props.Color,'BackgroundColor',props.BackgroundColor,'FontSize',props.FontSize,'FontWeight',props.FontWeight);
+    % Restore remaining properties
+    set(new_text,props)
 end

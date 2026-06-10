@@ -12,10 +12,13 @@ try
     hwinfo = imaqhwinfo("gentl");
 catch ME
     % Error out if imaqhwinfo fails
+    gui.toolsavailable(1)
+    gui.custom_msgbox('warn',getappdata(0,'hgui'),'Available devices',['No cameras found.' newline newline 'Please verify the correct installation of drivers and Addons following the instructions on' newline newline 'https://www.pivlab.de/wiki/5-camera-setup/'],'modal');
     error("Error while collecting information on connected GenTL hardware");
 end
 if isempty(hwinfo.DeviceIDs)
     % Error out if no devices found
+    gui.toolsavailable(1)
     disp("No GenTL hardware detected.");
 end
 deviceInfo = hwinfo.DeviceInfo;
@@ -48,9 +51,9 @@ end
 
 
 if isempty(hwinfo.DeviceIDs) && isempty(cam_name)
-    msgbox(['No cameras found.' newline newline 'Please verify the correct installation of drivers and Addons following the instructions on' newline newline 'https://www.pivlab.de/wiki/5-camera-setup/'],'Available Devices')
+    gui.custom_msgbox('warn',getappdata(0,'hgui'),'Available devices',['No cameras found.' newline newline 'Please verify the correct installation of drivers and Addons following the instructions on' newline newline 'https://www.pivlab.de/wiki/5-camera-setup/'],'modal');
 else
-    msgbox(['Detected cameras:' newline deviceListStr],'Available Devices')
+    gui.custom_msgbox('warn',getappdata(0,'hgui'),'Available devices',['Detected cameras:' newline deviceListStr],'modal');
 end
 gui.toolsavailable(1)
 

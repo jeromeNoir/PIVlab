@@ -6,7 +6,12 @@ try
     clear S
 catch
 end
-[status, result] = system('wmic path Win32_SerialPort get Name,DeviceID,Description');
+cmd = ['powershell -Command "', ...
+       'Get-CimInstance Win32_SerialPort | ', ...
+       'Select-Object Name,DeviceID,Description | ', ...
+       'ConvertTo-Csv -NoTypeInformation"'];
+
+[status, result] = system(cmd);
 driver_status='No installed CP210x driver found (driver not installed?)';
 access_status = 'Could not open the COM port (COM port is in use by other app?)';
 answer_status='Did not receive reply from the laser (turned off?)';
@@ -54,6 +59,6 @@ else
         answer_status=['Did not receive reply from the laser (laser turned off?)'];
     end
 end
-msgbox(['Information about the wireless dongle connection:' newline newline driver_status newline access_status newline answer_status],'Dongle status')
+gui.custom_msgbox('success',getappdata(0,'hgui'),'Wireless dongle status',['Information about the wireless dongle connection:' newline newline driver_status newline access_status newline answer_status],'modal');
 gui.toolsavailable(1)
 end

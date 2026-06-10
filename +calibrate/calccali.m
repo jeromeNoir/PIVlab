@@ -3,6 +3,13 @@ gui.put('derived',[]) %calibration makes previously derived params incorrect
 handles=gui.gethand;
 
 pointscali=gui.retr('pointscali');
+if isempty(pointscali)
+	pixeldist_val=str2double(get(handles.pixeldist,'String'));
+	if ~isnan(pixeldist_val) && pixeldist_val > 0
+		calibrate.pixeldist_changed_Callback(handles.pixeldist);
+		pointscali=gui.retr('pointscali');
+	end
+end
 if numel(pointscali)>0
 	xposition=pointscali(:,1);
 	yposition=pointscali(:,2);
@@ -74,6 +81,6 @@ else %no calibration performed yet
 	set(findobj(handles.uipanel_offsets,'Type','uicontrol'),'Enable','off')
 	set(handles.x_axis_direction,'value',1);
 	set(handles.y_axis_direction,'value',1);
-	msgbox ('You need to select a reference distance befor applying a calibration.','modal')
+    gui.custom_msgbox('error',getappdata(0,'hgui'),'Reference distance','You need to select a reference distance befor applying a calibration.','modal');
 end
 

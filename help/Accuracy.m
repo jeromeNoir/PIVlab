@@ -1,6 +1,7 @@
 %% This script can be used to check whether PIVlab generates high quality results on a specific harware / OS / MATLAB combination
 % (note that we are sure that it always does)
 close all;clear all; clc;drawnow
+addpath(fileparts(fileparts(mfilename('fullpath'))));
 
 %% Generate random artificial particle images
 size=600;
@@ -153,10 +154,22 @@ p{10,1}='Maximum intensity';     p{10,2}=1.0;         % Maximum intensity on inp
 
 % PIV analysis:
 
-image1 = preproc.PIVlab_preproc (A,p{1,2},p{2,2},p{3,2},p{4,2},p{5,2},p{6,2},p{7,2},p{8,2},p{9,2},p{10,2}); %preprocess images
-image2 = preproc.PIVlab_preproc (B,p{1,2},p{2,2},p{3,2},p{4,2},p{5,2},p{6,2},p{7,2},p{8,2},p{9,2},p{10,2});
+image1 = preproc.PIVlab_preproc( ...
+    in=A, roirect=p{1,2}, clahe=p{2,2}, clahesize=p{3,2}, highp=p{4,2}, ...
+    highpsize=p{5,2}, intenscap=p{6,2}, wienerwurst=p{7,2}, ...
+    wienerwurstsize=p{8,2}, minintens=p{9,2}, maxintens=p{10,2}); %preprocess images
+image2 = preproc.PIVlab_preproc( ...
+    in=B, roirect=p{1,2}, clahe=p{2,2}, clahesize=p{3,2}, highp=p{4,2}, ...
+    highpsize=p{5,2}, intenscap=p{6,2}, wienerwurst=p{7,2}, ...
+    wienerwurstsize=p{8,2}, minintens=p{9,2}, maxintens=p{10,2});
 tic % start timer for PIV analysis only
-[x y u v typevector,~,~] = piv.piv_FFTmulti (image2,image1,s{1,2},s{2,2},s{3,2},s{4,2},s{5,2},s{6,2},s{7,2},s{8,2},s{9,2},s{10,2},s{11,2},s{12,2},s{13,2},0,s{14,2},s{15,2});
+[x y u v typevector,~,~] = piv.piv_FFTmulti( ...
+	image1=image2, image2=image1, interrogationarea=s{1,2}, step=s{2,2}, ...
+	subpixfinder=s{3,2}, mask_inpt=s{4,2}, roi_inpt=s{5,2}, passes=s{6,2}, ...
+	int2=s{7,2}, int3=s{8,2}, int4=s{9,2}, imdeform=s{10,2}, ...
+	repeat=s{11,2}, mask_auto=s{12,2}, do_linear_correlation=s{13,2}, ...
+	do_correlation_matrices=0, repeat_last_pass=s{14,2}, ...
+	delta_diff_min=s{15,2});
 clearvars -except x y u v typevector image1 image2 u_real v_real x_real y_real A B
 elapsedtime=toc;
 fprintf('\n\n');
@@ -184,22 +197,25 @@ v_real_reduced(:,1)=[];v_real_reduced(:,end)=[];v_real_reduced(1,:)=[];v_real_re
 figure;imshow(A,'initialmagnification', 100);title('Artificial PIV image A')
 figure;imshow(B,'initialmagnification', 100);title('Artificial PIV image B')
 
-figure
+f1=figure;
+axh1=axes(f1);
 image((double(image1)+double(image2))/10);colormap('gray');
 hold on
 quiver(x,y,u_real_reduced,v_real_reduced,'g','AutoScaleFactor', 1.5);
 hold off;
 axis image;
-set(gca,'xtick',[],'ytick',[])
+set(axh1,'ytick',[])
+set(axh1,'xtick',[])
 title('Vector map of real velocities')
 
-figure
+f2=figure;
+axh2=axes(f2);
 image((double(image1)+double(image2))/10);colormap('gray');
 hold on
 quiver(x,y,u,v,'g','AutoScaleFactor', 1.5);
 hold off;
 axis image;
-set(gca,'xtick',[],'ytick',[])
+set(axh2,'xtick',[],'ytick',[])
 title('Vector map of PIV analysis')
 
 figure;imagesc(sqrt(u_real_reduced.^2+v_real_reduced.^2));title('Real displacement magnitude');
@@ -216,4 +232,3 @@ disp([ 'Mean (n = ' num2str(numel(x)) ') error u displacement: ' num2str(abs(mea
 disp([ 'Mean (n = ' num2str(numel(x)) ') error v displacement: ' num2str(abs(mean2(v-v_real_reduced))) ' +- ' num2str(std2(v-v_real_reduced)) ' px'])
 disp(['See figures for the detailed results.'])
 clear i j typevector
-

@@ -55,6 +55,13 @@ if ~isempty(resultslist)
 		v=resultslist(4,:);
 		typevector=resultslist(5,:);
 		typevector_original=resultslist(5,:);
+		if size(resultslist,1) >= 13
+			u2_data=resultslist(13,:);
+			v2_data=resultslist(14,:);
+		else
+			u2_data=cell(1,size(u,2));
+			v2_data=cell(1,size(v,2));
+		end
 		manualdeletion=gui.retr('manualdeletion');
 
 		if numel(manualdeletion)>0
@@ -100,9 +107,11 @@ if ~isempty(resultslist)
 			y(num_frames_to_process-1)={[]};
 			typevector_original(num_frames_to_process-1)={[]};
 			resultslist(1,num_frames_to_process-1)={[]};
+			u2_data(num_frames_to_process-1)={[]};
+			v2_data(num_frames_to_process-1)={[]};
 		end
-		parfor i=1:num_frames_to_process-1 %without parallel processing toolbox, this is just a normal for loop.
-			if ~isempty(x(i))
+        parfor i=1:num_frames_to_process-1 %without parallel processing toolbox, this is just a normal for loop.
+            if ~isempty(x(i))
 				if do_contrast_filter == 1 || do_bright_filter == 1
 					%% load images in a parfor loop
 					[~,~,ext] = fileparts(slicedfilepath1{i});
@@ -110,18 +119,22 @@ if ~isempty(resultslist)
 						currentimage1=import.f_readB16(slicedfilepath1{i});
 						currentimage2=import.f_readB16(slicedfilepath2{i});
 					else
-						currentimage1=import.imread_wrapper(slicedfilepath1{i},slicedframenum1(i),slicedframepart1(i,:))
-						currentimage2=import.imread_wrapper(slicedfilepath2{i},slicedframenum2(i),slicedframepart2(i,:))
+						currentimage1=import.imread_wrapper(slicedfilepath1{i},slicedframenum1(i),slicedframepart1(i,:));
+						currentimage2=import.imread_wrapper(slicedfilepath2{i},slicedframenum2(i),slicedframepart2(i,:));
 					end
-					rawimageA=currentimage1;
-					rawimageB=currentimage2;
-					if bg_sub==1
-						if size(currentimage1,3)>1 %color image cannot be displayed properly when bg subtraction is enabled.
-							currentimage1 = rgb2gray(currentimage1)-bg_img_A;
-							currentimage2 = rgb2gray(currentimage2)-bg_img_B;
-						else
-							currentimage1 = currentimage1-bg_img_A;
-							currentimage2 = currentimage2-bg_img_B;
+                    rawimageA=currentimage1;
+                    rawimageB=currentimage2;
+                    if bg_sub==1
+                        if size(currentimage1,3)>1 %color image cannot be displayed properly when bg subtraction is enabled.
+                            if size(currentimage1,3)>3
+                                currentimage1=currentimage1(:,:,1:3);
+                                currentimage2=currentimage2(:,:,1:3);
+                            end
+                            currentimage1 = rgb2gray(currentimage1)-bg_img_A;
+                            currentimage2 = rgb2gray(currentimage2)-bg_img_B;
+                        else
+                            currentimage1 = currentimage1-bg_img_A;
+                            currentimage2 = currentimage2-bg_img_B;
 						end
 					end
 					currentimage1(currentimage1<0)=0; %bg subtraction may yield negative
@@ -132,7 +145,7 @@ if ~isempty(resultslist)
 					A=[];B=[];rawimageA=[];rawimageB=[];
 				end
 				corr2_value=resultslist{12,i};
-				[u_new{i},v_new{i},typevector_new{i}]=validate.filtervectors_all_parallel(x{i},y{i},u{i},v{i},typevector_original{i},calu,calv,velrect,do_stdev_check,stdthresh,do_local_median,neigh_thresh,do_contrast_filter,do_bright_filter,contrast_filter_thresh,bright_filter_thresh,interpol_missing,A,B,rawimageA,rawimageB,do_corr2_filter,corr_filter_thresh,corr2_value,do_notch_filter,notch_L_thresh,notch_H_thresh,roi_freehand);
+				[u_new{i},v_new{i},typevector_new{i}]=validate.filtervectors_all_parallel(x{i},y{i},u{i},v{i},typevector_original{i},calu,calv,velrect,do_stdev_check,stdthresh,do_local_median,neigh_thresh,do_contrast_filter,do_bright_filter,contrast_filter_thresh,bright_filter_thresh,interpol_missing,A,B,rawimageA,rawimageB,do_corr2_filter,corr_filter_thresh,corr2_value,do_notch_filter,notch_L_thresh,notch_H_thresh,roi_freehand,u2_data{i},v2_data{i});
 				hbar.iterate(1); %#ok<*PFBNS>
 			end
 		end
@@ -167,7 +180,7 @@ if ~isempty(resultslist)
 		resultslist(9, :) = typevector_new;
 		gui.put('resultslist', resultslist);
 	end
-	%set (handles.apply_filter_all, 'string', 'Apply to all frames');
+	set (handles.apply_filter_all, 'string', 'Apply to all frames');
 	gui.update_progress(0)
 	gui.toolsavailable(1)
 	gui.sliderdisp(gui.retr('pivlab_axis'));

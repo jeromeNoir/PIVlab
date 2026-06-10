@@ -53,8 +53,8 @@ new_map=colormap('gray');
 new_map(1:3,:)=[0 0.2 0;0 0.2 0;0 0.2 0];
 new_map(end-2:end,:)=[1 0.7 0.7;1 0.7 0.7;1 0.7 0.7];
 colormap(new_map);axis image;
-set(gca,'ytick',[])
-set(gca,'xtick',[])
+set(gui.retr('pivlab_axis'),'ytick',[])
+set(gui.retr('pivlab_axis'),'xtick',[])
 colorbar
 
 
@@ -68,9 +68,7 @@ while getappdata(hgui,'cancel_capture') ~=1 && displayed_img_amount < img_amount
 	%% sharpness indicator
 	sharpness_enabled = getappdata(hgui,'sharpness_enabled');
 	if sharpness_enabled == 1 % sharpness indicator
-		textx=1240;
-		texty=950;
-		[~,~] = PIVlab_capture_sharpness_indicator (ima,textx,texty);
+		[~,~] = PIVlab_capture_sharpness_indicator (ima,1);
 	else
 		delete(findobj('tag','sharpness_display_text'));
 	end

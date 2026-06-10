@@ -53,7 +53,7 @@ handles.importvideo = uicontrol(fig_handle,'Style','pushbutton','String','Save a
 item=[0 item(2)+item(4)+margin parentitem(3) 13];
 axes_handle=axes('Parent',fig_handle,'units','characters','position',[item(1)+margin parentitem(4)-item(4)-margin-item(2) item(3)-margin*2 item(4)]);
 axis image;
-set(gca,'ActivePositionProperty','outerposition');%,'Box','off','DataAspectRatioMode','auto','Layer','bottom','Units','normalized');
+set(axes_handle,'ActivePositionProperty','outerposition');%,'Box','off','DataAspectRatioMode','auto','Layer','bottom','Units','normalized');
 
 %axes for scroll bar
 fig_size = get(fig_handle, 'Position');
@@ -167,19 +167,18 @@ video_loaded=0;
 					set(handles.startframe,'String', num2str(1))
 					set(handles.endframe,'String', num2str(num_frames))
 					set(handles.skipframe,'String', num2str(1))
-					frame_selection = [1:1:num_frames];
-					scroll(1)
-					set(handles.importvideo,'enable','on')
-					set(handles.startframe,'enable','on')
-					set(handles.endframe,'enable','on')
-					set(handles.skipframe,'enable','on')
-				
-			else
-				errordlg({'Matlab could not import this video file. Most likely, the video codec cannot be used by Matlab. This is not a PIVlab-related issue. The exact error message is: ' sprintf('\n') ME.identifier sprintf('\n') ME.message});
-			end
-		end
-		
-	end
+                    frame_selection = [1:1:num_frames];
+                    scroll(1)
+                    set(handles.importvideo,'enable','on')
+                    set(handles.startframe,'enable','on')
+                    set(handles.endframe,'enable','on')
+                    set(handles.skipframe,'enable','on')
+            else
+                gui.custom_msgbox('error',getappdata(0,'hgui'),'Error',{'Matlab could not import this video file. Most likely, the video codec cannot be used by Matlab. This is not a PIVlab-related issue. The exact error message is: ' sprintf('\n') ME.identifier sprintf('\n') ME.message},'modal');
+            end
+        end
+
+    end
 
 
 	function key_press(src, event)  %#ok, unused arguments

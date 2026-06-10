@@ -30,6 +30,7 @@ if imaq_error==0
         if strcmp(info.AdaptorName,'gentl')
             disp(['gentl adaptor found with ID: ' num2str(adaptorID)])
             found_correct_adaptor=1;
+            imaq_error=0;
             break
         else
             imaq_error=2;
@@ -51,14 +52,14 @@ if imaq_error==0 && found_correct_adaptor ==1
     end
 end
 if imaq_error==1
-    errordlg('Error: Image Acquisition Toolbox not available! This camera needs the image acquisition toolbox.','Error!','modal')
+    gui.custom_msgbox('error',getappdata(0,'hgui'),'Error','Error: Image Acquisition Toolbox not available! This camera needs the image acquisition toolbox.','modal');
     disp('Error: Image Acquisition Toolbox not available! This camera needs the image acquisition toolbox.')
 elseif imaq_error==2
     disp('ERROR: gentl adaptor not found. Please install the GenICam / GenTL support package from here:')
     disp('https://de.mathworks.com/matlabcentral/fileexchange/45180')
-    errordlg({'ERROR: gentl adaptor not found. Please got to Matlab file exchange and search for "GenICam Interface " to install it.' 'Link: https://de.mathworks.com/matlabcentral/fileexchange/45180'},'Error, support package missing','modal')
+    gui.custom_msgbox('error',getappdata(0,'hgui'),'Error, support package missing',{'ERROR: gentl adaptor not found. Please got to Matlab file exchange and search for "GenICam Interface " to install it.' 'Link: https://de.mathworks.com/matlabcentral/fileexchange/45180'},'modal');
 elseif imaq_error==3
-    errordlg('Error: Camera not found! Is it connected?','Error!','modal')
+    gui.custom_msgbox('error',getappdata(0,'hgui'),'Error','Error: Camera not found! Is it connected?','modal');
 end
 
 disp(['Found camera: ' OPTOcam_name])
@@ -76,7 +77,22 @@ elseif bitmode==12
 end
 
 OPTOcam_settings = get(OPTOcam_vid);
-OPTOcam_settings.Source.DeviceLinkThroughputLimitMode = 'off';
+executeCommand(OPTOcam_settings.Source,"BslSensorOn")
+disp('Waking up sensor from sleep mode.')
+pause(0.1)
+
+%% setting USB speed to be slightly higher than required
+OPTOcam_settings.Source.DeviceLinkThroughputLimitMode = 'on';
+bitmultiply = bitmode*0.25 -1;
+ThroughputLimit=round(2500000 * frame_rate * bitmultiply * 1.025); % required USB bandwidth at 8 bit.
+if ThroughputLimit > 2500000 * 160 *1.025
+	ThroughputLimit = round(2500000 * 160*1.025);
+elseif ThroughputLimit < 2500000 * 16
+	ThroughputLimit = 2500000 * 16;
+end
+OPTOcam_settings.Source.DeviceLinkThroughputLimit=ThroughputLimit;
+pause(0.1)
+
 OPTOcam_settings.PreviewFullBitDepth='On';
 OPTOcam_vid.PreviewFullBitDepth='On';
 
@@ -92,8 +108,8 @@ new_map=colormap('gray');
 new_map(1:3,:)=[0 0.2 0;0 0.2 0;0 0.2 0];
 new_map(end-2:end,:)=[1 0.7 0.7;1 0.7 0.7;1 0.7 0.7];
 colormap(new_map);axis image;
-set(gca,'ytick',[])
-set(gca,'xtick',[])
+set(gui.retr('pivlab_axis'),'ytick',[])
+set(gui.retr('pivlab_axis'),'xtick',[])
 colorbar
 
 
@@ -132,6 +148,12 @@ if isempty (OPTOcam_gain)
 end
 OPTOcam_settings.Source.Gain = OPTOcam_gain;
 
+%% display timing information
+max_fps_with_current_settings = 1/((get(OPTOcam_vid.Source,'SensorReadoutTime') + get(OPTOcam_vid.Source,'BslExposureStartDelay'))/1000/1000);
+disp(['Maximum fps with current settings: ' num2str(max_fps_with_current_settings) ' fps.'])
+disp(['Requested fps: ' num2str(frame_rate) ' fps.']);
+disp(['DeviceLinkThroughputLimitMode set to: ' num2str(ThroughputLimit) '.'])
+
 %% start acqusition (waiting for trigger)
 OPTOcam_frames_to_capture = nr_of_images*2;
 OPTOcam_vid.FramesPerTrigger = OPTOcam_frames_to_capture;
@@ -158,6 +180,7 @@ if ~isinf(nr_of_images)
     end
 end
 drawnow;
+pause(0.05)
 
 function CustomIMAQErrorFcn(obj, event, varargin)
 stop(obj)
@@ -202,7 +225,7 @@ end
 
 
 if strcmpi(event.Data.MessageID,'imaq:imaqmex:outofmemory')
-    msgbox('Out of memory. RAM is full, most likely, you need to lower the amount of frames to capture to fix this error.','modal');
+    gui.custom_msgbox('error',getappdata(0,'hgui'),'Memory full','Out of memory. RAM is full, most likely, you need to lower the amount of frames to capture to fix this error.','modal');
 else
-    msgbox('Image capture timeout. Most likely, memory is full and you need to lower the amount of frames to capture to fix this error. It is also possible that the synchronization cable is not plugged in correctly.','modal');
+    gui.custom_msgbox('error',getappdata(0,'hgui'),'Error','Image capture timeout. Most likely, memory is full and you need to lower the amount of frames to capture to fix this error. It is also possible that the synchronization cable is not plugged in correctly.','modal');
 end

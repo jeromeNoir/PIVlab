@@ -1,8 +1,12 @@
-function load_polyline_Callback (caller,~)
+function load_polyline_Callback (caller,~,coordinateFile)
 filepath=gui.retr('filepath');
-handles=gui.gethand;
 if size(filepath,1) > 1 %did the user load images?
-	[polyfile,polypath] = uigetfile('*.mat','Load coordinate','PIVlab_coordinates.mat');
+	if nargin >= 3 && ~isempty(coordinateFile)
+		[polypath,polyfile,polyext] = fileparts(coordinateFile);
+		polyfile = [polyfile polyext];
+	else
+		[polyfile,polypath] = uigetfile('*.mat','Load coordinate','PIVlab_coordinates.mat');
+	end
 	if isequal(polyfile,0) | isequal(polypath,0)
 		%do nothing
 	else
@@ -27,12 +31,11 @@ if size(filepath,1) > 1 %did the user load images?
 				delete(findobj('tag', 'extractline'))
 				delete(findobj('tag','areaint'));
 				extract.update_display(extract_type, xposition, yposition);
-			else
-				msgbox('You tried to load polyline coordinates from the area extraction panel or vice versa.','Error','error','modal')
+            else
+                gui.custom_msgbox('error',getappdata(0,'hgui'),'Error','You tried to load polyline coordinates from the area extraction panel or vice versa.','modal');
 			end
 		else
 			disp ('No polyline coordinate data found in selected file.')
 		end
 	end
 end
-

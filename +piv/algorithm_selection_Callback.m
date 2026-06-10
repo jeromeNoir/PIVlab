@@ -17,6 +17,7 @@ if selection ==1 % piv fft multi
 	set(handles.text14,'visible','on')
 	set(handles.subpix,'visible','on')
 	set(handles.uipanel_ofv1,'visible','off')
+    set(handles.uipanel_ofv2,'visible','off')
 	set(handles.textSuggest,'visible','on')
 	set(handles.SuggestSettings,'visible','on')
 	if get(handles.checkbox26,'value') ~=0
@@ -40,6 +41,7 @@ if selection ==2 % ensemble
 	set(handles.text14,'visible','on')
 	set(handles.subpix,'visible','on')
 	set(handles.uipanel_ofv1,'visible','off')
+    set(handles.uipanel_ofv2,'visible','off')
 	set(handles.textSuggest,'visible','on')
 	set(handles.SuggestSettings,'visible','on')
 	piv.dispinterrog
@@ -56,12 +58,14 @@ if selection==3 % DCC
 	set(handles.text14,'visible','on')
 	set(handles.subpix,'visible','on')
 	set(handles.uipanel_ofv1,'visible','off')
+    set(handles.uipanel_ofv2,'visible','off')
 	set(handles.textSuggest,'visible','on')
 	set(handles.SuggestSettings,'visible','on')
 	piv.dispinterrog
 end
 if selection ==4 %wOFV
 	set(handles.uipanel_ofv1,'visible','on')
+    set(handles.uipanel_ofv2,'visible','on')
 	set(handles.uipanel42,'visible','off')
 	set(handles.uipanel41,'visible','off')
 	set(handles.CorrQuality,'visible','off')
@@ -80,14 +84,14 @@ end
 current_vector_setting=get(handles.nthvect,'String');
 if selection ==4 %wOFV
 	if ~strcmp(current_vector_setting,'5') && ~batchModeActive
-		ans_w=questdlg(['wOFV results in one vector per pixel. Displaying all vectors is not recommended.' newline newline 'Should I reduce the vector display density for you?' newline newline 'You can manually change this by going to Plot -> Modify plot appearance -> plot every nth vector'],'Vector display density','Yes','No','Yes');
+		ans_w = gui.custom_msgbox('quest',getappdata(0,'hgui'),'Vector display density',['wOFV results in one vector per pixel. Displaying all vectors is not recommended.' newline newline 'Should I reduce the vector display density for you?' newline newline 'You can manually change this by going to Plot -> Modify plot appearance -> plot every nth vector'],'modal',{'Yes','No'},'Yes');
 		if strcmp(ans_w,'Yes')
 			set(handles.nthvect,'String',5)
 		end
 	end
 else
 	if ~strcmp(current_vector_setting,'1') && ~batchModeActive		
-		ans_w=questdlg(['You are currently not plotting every calculated vector.' newline newline 'Should I apply the standard vector display setting for you?' newline newline 'You can manually change this by going to Plot -> Modify plot appearance -> plot every nth vector'],'Vector display density','Yes','No','Yes');
+		ans_w = gui.custom_msgbox('quest',getappdata(0,'hgui'),'Vector display density',['You are currently not plotting every calculated vector.' newline newline 'Should I apply the standard vector display setting for you?' newline newline 'You can manually change this by going to Plot -> Modify plot appearance -> plot every nth vector'],'modal',{'Yes','No'},'Yes');
 		if strcmp(ans_w,'Yes')
 			set(handles.nthvect,'String',1)
 		end

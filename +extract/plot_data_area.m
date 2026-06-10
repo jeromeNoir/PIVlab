@@ -19,7 +19,7 @@ yposition=gui.retr('yposition');
 extract_type = gui.retr('extract_type');
 if ~strcmp(extract_type,'extract_poly_area') && ~strcmp(extract_type,'extract_rectangle_area') && ~strcmp(extract_type,'extract_circle_area') && ~strcmp(extract_type,'extract_circle_series_area')
 	if refreshdisplay
-		msgbox('No area was drawn. Click ''Draw!'' on the left panel to start drawing an extraction area.','Error','error','modal')
+		gui.custom_msgbox('error',getappdata(0,'hgui'),'Error','No area was drawn. Click ''Draw!'' on the left panel to start drawing an extraction area.','modal');
 	end
 else
 	if (gui.retr('calu')==1 || gui.retr('calu')==-1) && gui.retr('calxy')==1
@@ -40,7 +40,7 @@ else
 	unitpar=get(handles.extraction_choice_area,'string');
 	unitpar=unitpar{get(handles.extraction_choice_area,'value')};
 	%unitpar=unitpar(strfind(unitpar,'[')+1:end-1);
-	unitpar=unitpar(strfind(unitpar,'in ')+3:end);
+	idx_in=strfind(unitpar,'in '); if ~isempty(idx_in); unitpar=unitpar(idx_in(end)+3:end); end
 
 	if size(resultslist,2)>=currentframe && numel(resultslist{1,currentframe})>0 %if there is data in the current frame
 		maptoget=plot.rescale_maps_nan(maptoget,0,currentframe);

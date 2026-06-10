@@ -5,7 +5,7 @@ function [timing_table, pin_string, cam_delay, frame_time] = PIVlab_calc_oltsync
 %f1exp_cam is calculated as      floor(pulse_sep*las_percent/100)+1; %+1 because in the snychronizer, the cam expo is started 1 us before the ld pulse
 %it has therefore the length of the laser pulse
 
-if strcmp(camera_type,'pco_pixelfly') || strcmp(camera_type,'pco_panda')
+if strcmp(camera_type,'pco_pixelfly') || strcmp(camera_type,'pco_panda') || strcmp(camera_type,'pco_edge26')
 	camera_principle='double_shutter';
 else
 	camera_principle='normal_shutter';
@@ -34,6 +34,11 @@ if strcmp(camera_type,'pco_panda')
 	cam_delay=3;
 end
 
+if strcmp(camera_type,'pco_edge26')
+    blind_time=2;
+	cam_delay=2;
+end
+
 if strcmp(camera_type,'chronos')
 	blind_time=8;
 	cam_delay=4;
@@ -54,7 +59,7 @@ if strcmp(camera_type,'OPTRONIS')
         camera_sub_type=''; %empty string
     end
     switch camera_sub_type
-        case 'Cyclone-2-2000-M'
+        case {'Cyclone-2-2000-M', 'Cyclone-2-2000-M-bitflow'}
             if isempty(bitrate)
                 bitrate=8;
             end
@@ -69,11 +74,11 @@ if strcmp(camera_type,'OPTRONIS')
         case 'Cyclone-1HS-3500-M'
             blind_time=20;
             cam_delay=3;
-        case 'Cyclone-25-150-M'
+        case {'Cyclone-25-150-M', 'Cyclone-25-150-M-bitflow'}
             blind_time=27;
             cam_delay=3;
         otherwise
-            msgbox('This camera sub type is not known.','modal')
+            gui.custom_msgbox('error',getappdata(0,'hgui'),'Error','This camera sub type is not known.','modal');
             blind_time=8;
             cam_delay=3;
     end

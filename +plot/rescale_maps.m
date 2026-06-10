@@ -16,14 +16,23 @@ else
     if size(out,3)>1
     	out(:,:,2:end)=[];
     end
-    out(:,:)=mean(in(:)); %Rand wird auf Mittelwert gesetzt
-    step=x(1,2)-x(1,1)+1;
+    extrapolate_border=get(handles.extrapolate_border,'value');
+    if extrapolate_border
+        out(:,:)=NaN; %Rand wird inpainted
+    else
+        out(:,:)=mean(in(:)); %Rand wird auf Mittelwert gesetzt
+    end
+    step=x(1,2)-x(1,1);
     minx=(min(min(x))-step/2);
     maxx=(max(max(x))+step/2);
     miny=(min(min(y))-step/2);
     maxy=(max(max(y))+step/2);
-    width=maxx-minx;
-    height=maxy-miny;
+    miny_idx=max(1,floor(miny));
+    minx_idx=max(1,floor(minx));
+    maxy_idx=min(size(out,1),floor(maxy-1));
+    maxx_idx=min(size(out,2),floor(maxx-1));
+    target_rows=maxy_idx-miny_idx+1;
+    target_cols=maxx_idx-minx_idx+1;
     if size(in,3)>1 %why would this actually happen...?
     	in(:,:,2:end)=[];
     end
@@ -31,28 +40,35 @@ else
     	X_raw=cos(in/180*pi);
     	Y_raw=sin(in/180*pi);
     	%interpolate
-    	X_interp = imresize(X_raw,[height width],'bilinear');
-    	Y_interp = imresize(Y_raw,[height width],'bilinear');
+    	X_interp = imresize(X_raw,[target_rows target_cols],'bilinear');
+    	Y_interp = imresize(Y_raw,[target_rows target_cols],'bilinear');
     	%reconvert to phase
     	dispvar = angle(complex(X_interp,Y_interp))*180/pi;
     else
     	colormap_interpolation_list=get(handles.colormap_interpolation,'String');
     	colormap_interpolation_value = get(handles.colormap_interpolation,'Value');
-    	dispvar = imresize(in,[height width],colormap_interpolation_list{colormap_interpolation_value}); %INTERPOLATION
+    	dispvar = imresize(in,[target_rows target_cols],colormap_interpolation_list{colormap_interpolation_value}); %INTERPOLATION
     end
-
-    if miny<1
-    	miny=1;
-    end
-    if minx<1
-    	minx=1;
-    end
-    try
-    	out(floor(miny):floor(maxy-1),floor(minx):floor(maxx-1))=dispvar;
-    catch
-    	disp('temp workaround')
-    	A=out(floor(miny):floor(maxy-1),floor(minx):floor(maxx-1));
-    	out(floor(miny):floor(maxy-1),floor(minx):floor(maxx-1))=dispvar(1:size(A,1),1:size(A,2));
+    out(miny_idx:maxy_idx,minx_idx:maxx_idx)=dispvar;
+    if extrapolate_border
+        interior_nan=false(size(out));
+        interior_nan(miny_idx:maxy_idx,minx_idx:maxx_idx)=isnan(dispvar);
+        % Limit fill to the ROI (pixels outside ROI are masked and never shown)
+        roirect=gui.retr('roirect');
+        if ~isempty(roirect) && numel(roirect)>=4
+            o_r1=max(1,          roirect(2));
+            o_r2=min(size(out,1),roirect(2)+roirect(4));
+            o_c1=max(1,          roirect(1));
+            o_c2=min(size(out,2),roirect(1)+roirect(3));
+        else
+            o_r1=1; o_r2=size(out,1); o_c1=1; o_c2=size(out,2);
+        end
+        sub=out(o_r1:o_r2, o_c1:o_c2);
+        sub=plot.inpaint_border_strips(sub, ...
+            miny_idx-o_r1+1, maxy_idx-o_r1+1, ...
+            minx_idx-o_c1+1, maxx_idx-o_c1+1);
+        out(o_r1:o_r2, o_c1:o_c2)=sub;
+        out(interior_nan)=NaN;
     end
 end
 

@@ -26,6 +26,7 @@ if imaq_error==0
         if strcmp(info.AdaptorName,'gentl')
             disp(['gentl adaptor found with ID: ' num2str(adaptorID)])
             found_correct_adaptor=1;
+            imaq_error=0;
             break
         else
             imaq_error=2;
@@ -47,14 +48,14 @@ if imaq_error==0 && found_correct_adaptor ==1
     end
 end
 if imaq_error==1
-    errordlg('Error: Image Acquisition Toolbox not available! This camera needs the image acquisition toolbox.','Error!','modal')
+    gui.custom_msgbox('error',getappdata(0,'hgui'),'Error','Error: Image Acquisition Toolbox not available! This camera needs the image acquisition toolbox.','modal');
     disp('Error: Image Acquisition Toolbox not available! This camera needs the image acquisition toolbox.')
 elseif imaq_error==2
     disp('ERROR: gentl adaptor not found. Please install the GenICam / GenTL support package from here:')
     disp('https://de.mathworks.com/matlabcentral/fileexchange/45180')
-    errordlg({'ERROR: gentl adaptor not found. Please got to Matlab file exchange and search for "GenICam Interface " to install it.' 'Link: https://de.mathworks.com/matlabcentral/fileexchange/45180'},'Error, support package missing','modal')
+    gui.custom_msgbox('error',getappdata(0,'hgui'),'Error, support package missing',{'ERROR: gentl adaptor not found. Please got to Matlab file exchange and search for "GenICam Interface " to install it.' 'Link: https://de.mathworks.com/matlabcentral/fileexchange/45180'},'modal');
 elseif imaq_error==3
-    errordlg('Error: Camera not found! Is it connected?','Error!','modal')
+    gui.custom_msgbox('error',getappdata(0,'hgui'),'Error','Error: Camera not found! Is it connected?','modal');
 end
 
 disp(['Found camera: ' OPTOcam_name])
@@ -63,6 +64,8 @@ OPTOcam_supported_formats = info.DeviceInfo(CamID).SupportedFormats;
 OPTOcam_vid = videoinput(info.AdaptorName,info.DeviceInfo(CamID).DeviceID,'Mono12'); %calibration image in 12 bit always.
 
 OPTOcam_settings = get(OPTOcam_vid);
+executeCommand(OPTOcam_settings.Source,"BslSensorOn")
+disp('Waking up sensor from sleep mode.')
 OPTOcam_settings.Source.DeviceLinkThroughputLimitMode = 'off';
 OPTOcam_settings.PreviewFullBitDepth='On';
 OPTOcam_vid.PreviewFullBitDepth='On';
@@ -102,8 +105,8 @@ new_map=colormap('gray');
 new_map(1:3,:)=[0 0.2 0;0 0.2 0;0 0.2 0];
 new_map(end-2:end,:)=[1 0.7 0.7;1 0.7 0.7;1 0.7 0.7];
 colormap(new_map);axis image;
-set(gca,'ytick',[])
-set(gca,'xtick',[])
+set(gui.retr('pivlab_axis'),'ytick',[])
+set(gui.retr('pivlab_axis'),'xtick',[])
 colorbar
 
 
@@ -116,12 +119,20 @@ displayed_img_amount=0;
 while getappdata(hgui,'cancel_capture') ~=1 && displayed_img_amount < img_amount
     ima = image_handle_OPTOcam.CData;
     ima_out = bitshift(ima,4); %stretch 12 bit to 16 bit
+
+    %% live charuco
+    do_charuco_detection = gui.retr('do_charuco_detection');
+    if isempty(do_charuco_detection)
+        do_charuco_detection=0;
+    end
+    if do_charuco_detection
+        PIVlab_capture_charuco_detector(ima_out,PIVlab_axis,image_handle_OPTOcam);
+    end
+
     %% sharpness indicator
     sharpness_enabled = getappdata(hgui,'sharpness_enabled');
     if sharpness_enabled == 1 % sharpness indicator
-        textx=1240;
-        texty=950;
-        [~,~] = PIVlab_capture_sharpness_indicator (ima,textx,texty);
+        [~,~] = PIVlab_capture_sharpness_indicator (ima,1);
     else
         delete(findobj('tag','sharpness_display_text'));
     end
@@ -209,7 +220,7 @@ while getappdata(hgui,'cancel_capture') ~=1 && displayed_img_amount < img_amount
                     if toc(delay_time_1)>=delay_time %only every second image is taken for analysis. This gives more time to the servo to reach position
                         delay_time_1=tic;
                         sharp_loop_cnt=sharp_loop_cnt+1;
-                        [sharpness,~] = PIVlab_capture_sharpness_indicator (ima,[],[]);
+                        [sharpness,~] = PIVlab_capture_sharpness_indicator (ima,0);
                         sharpness_focus_table(sharp_loop_cnt,1)=focus;
                         sharpness_focus_table(sharp_loop_cnt,2)=sharpness;
                         focus=focus+focus_step_raw;
@@ -259,7 +270,7 @@ while getappdata(hgui,'cancel_capture') ~=1 && displayed_img_amount < img_amount
                         if toc(delay_time_1)>=delay_time %only every second image is taken for analysis. This gives more time to the servo to reach position
                             delay_time_1=tic;
                             sharp_loop_cnt=sharp_loop_cnt+1;
-                            [sharpness,~] = PIVlab_capture_sharpness_indicator (ima,[],[]);
+                            [sharpness,~] = PIVlab_capture_sharpness_indicator (ima,0);
                             sharpness_focus_table(sharp_loop_cnt,1)=focus;
                             sharpness_focus_table(sharp_loop_cnt,2)=sharpness;
                             %original focus=focus-focus_step_fine;
@@ -304,18 +315,15 @@ while getappdata(hgui,'cancel_capture') ~=1 && displayed_img_amount < img_amount
         sharpness_focus_table=[];
         sharp_loop_cnt=[];
     end
-
-
-
     if img_amount == 1
-        if sum(ima(1:10,1,1)) ~=10 %check if the display was updated, if there is real camera data. I didnt find a more elegant way...
+        if sum(ima(1:10,1,1)) ~=10 && sum(ima(1:10,1,1)) ~=655350 %check if the display was updated, if there is real camera data. I didnt find a more elegant way...
             displayed_img_amount=displayed_img_amount+1;
         end
     end
-
-
 end
 stoppreview(OPTOcam_vid)
+executeCommand(OPTOcam_settings.Source,"BslSensorOff")
+disp('Sending sensor to sleep mode.')
 
 function autofocus_notification(running)
 auto_focus_active_hint=findobj('tag', 'auto_focus_active');

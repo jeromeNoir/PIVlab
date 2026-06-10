@@ -101,7 +101,7 @@ if ok==1
 		set(handles.overall, 'string' , ['Total progress: 0%']);
 		drawnow; %#ok<*NBRAK>
 
-		do_correlation_matrices=gui.retr('do_correlation_matrices');
+		do_correlation_matrices=0;
 		slicedfilepath1=cell(0);
 		slicedfilepath2=cell(0);
 		slicedframenum1=[];
@@ -114,7 +114,9 @@ if ok==1
 		vlist=cell(0);
 		typelist=cell(0);
 		corrlist=cell(0);
-		correlation_matrices_list=cell(0);
+		u2list=cell(0);
+		v2list=cell(0);
+		%correlation_matrices_list=cell(0);
 		for i=1:2:num_frames_to_process
 			k=(i+1)/2;
 			slicedfilepath1{k}=filepath{i};
@@ -138,37 +140,52 @@ if ok==1
 				bg_sub=1;
 			else
 				bg_img_A=[];
-				bg_img_B=[];
-				bg_sub=0;
-			end
+                bg_img_B=[];
+                bg_sub=0;
+            end
 
-			masks_in_frame=gui.retr('masks_in_frame');
-			if isempty(masks_in_frame)
-				%masks_in_frame=cell(size(slicedfilepath1,2),1);
-				masks_in_frame=cell(1,size(slicedfilepath1,2));
-			end
+            masks_in_frame=gui.retr('masks_in_frame');
+            if isempty(masks_in_frame)
+                %masks_in_frame=cell(size(slicedfilepath1,2),1);
+                masks_in_frame=cell(1,size(slicedfilepath1,2));
+            end
+            view_raw=handles.calib_viewtype.Value;
+            if view_raw==1
+                view='valid';
+            elseif view_raw==2
+                view='same';
+            elseif view_raw==3
+                view='full';
+            end
+            cam_use_calibration = gui.retr('cam_use_calibration');
+            cam_use_rectification = gui.retr('cam_use_rectification');
+            cameraParams=gui.retr('cameraParams');
+            rectification_tform = gui.retr('rectification_tform');
 
-			parfor i=1:size(slicedfilepath1,2)
-				if exist(fullfile(userpath,'cancel_piv'),'file')
-					close(hbar);
-					continue
-				end
+            parfor i=1:size(slicedfilepath1,2)
+                if exist(fullfile(userpath,'cancel_piv'),'file')
+                    close(hbar);
+                    continue
+                end
 
-				[~,~,ext] = fileparts(slicedfilepath1{i});
-				if strcmp(ext,'.b16')
-					currentimage1=import.f_readB16(slicedfilepath1{i});
-					currentimage2=import.f_readB16(slicedfilepath2{i});
-
-				else
-					currentimage1=import.imread_wrapper(slicedfilepath1{i},slicedframenum1(i),slicedframepart1(i,:))
-					currentimage2=import.imread_wrapper(slicedfilepath2{i},slicedframenum2(i),slicedframepart2(i,:))
-				end
-				if bg_sub==1
-					if size(currentimage1,3)>1 %color image cannot be displayed properly when bg subtraction is enabled.
-						currentimage1 = rgb2gray(currentimage1)-bg_img_A;
-						currentimage2 = rgb2gray(currentimage2)-bg_img_B;
-					else
-						currentimage1 = currentimage1-bg_img_A;
+                [~,~,ext] = fileparts(slicedfilepath1{i});
+                if strcmp(ext,'.b16')
+                    currentimage1=import.f_readB16(slicedfilepath1{i});
+                    currentimage2=import.f_readB16(slicedfilepath2{i});
+                    currentimage1 = preproc.cam_undistort(currentimage1,'cubic',view,cam_use_calibration,cam_use_rectification,cameraParams,rectification_tform);
+                    currentimage2 = preproc.cam_undistort(currentimage2,'cubic',view,cam_use_calibration,cam_use_rectification,cameraParams,rectification_tform);
+                else
+                    currentimage1=import.imread_wrapper(slicedfilepath1{i},slicedframenum1(i),slicedframepart1(i,:))
+                    currentimage2=import.imread_wrapper(slicedfilepath2{i},slicedframenum2(i),slicedframepart2(i,:))
+                    currentimage1 = preproc.cam_undistort(currentimage1,'cubic',view,cam_use_calibration,cam_use_rectification,cameraParams,rectification_tform);
+                    currentimage2 = preproc.cam_undistort(currentimage2,'cubic',view,cam_use_calibration,cam_use_rectification,cameraParams,rectification_tform);
+                end
+                if bg_sub==1
+                    if size(currentimage1,3)>1 %color image cannot be displayed properly when bg subtraction is enabled.
+                        currentimage1 = rgb2gray(currentimage1)-bg_img_A;
+                        currentimage2 = rgb2gray(currentimage2)-bg_img_B;
+                    else
+                        currentimage1 = currentimage1-bg_img_A;
 						currentimage2 = currentimage2-bg_img_B;
 					end
 				end
@@ -197,8 +214,16 @@ if ok==1
 					stretcher_B(2)=maxintens;
 				end
 
-				image1 = preproc.PIVlab_preproc (image1,roirect,clahe, clahesize,highp,highpsize,intenscap,wienerwurst,wienerwurstsize,stretcher_A(1),stretcher_A(2));
-				image2 = preproc.PIVlab_preproc (image2,roirect,clahe, clahesize,highp,highpsize,intenscap,wienerwurst,wienerwurstsize,stretcher_B(1),stretcher_B(2));
+				image1 = preproc.PIVlab_preproc( ...
+					in=image1, roirect=roirect, clahe=clahe, clahesize=clahesize, ...
+					highp=highp, highpsize=highpsize, intenscap=intenscap, ...
+					wienerwurst=wienerwurst, wienerwurstsize=wienerwurstsize, ...
+					minintens=stretcher_A(1), maxintens=stretcher_A(2));
+				image2 = preproc.PIVlab_preproc( ...
+					in=image2, roirect=roirect, clahe=clahe, clahesize=clahesize, ...
+					highp=highp, highpsize=highpsize, intenscap=intenscap, ...
+					wienerwurst=wienerwurst, wienerwurstsize=wienerwurstsize, ...
+					minintens=stretcher_B(1), maxintens=stretcher_B(2));
 
 
 				if numel(masks_in_frame)< i
@@ -216,7 +241,9 @@ if ok==1
 				vlist{i}=v;
 				typelist{i}=typevector;
 				corrlist{i}=zeros(size(typevector)); %no correlation coefficient in DCC.
-				correlation_matrices_list{i}=[];%no correlation matrix output for dcc
+				u2list{i}=[];
+				v2list{i}=[];
+				%correlation_matrices_list{i}=[];%no correlation matrix output for dcc
 				hbar.iterate(1);
 			end
 		elseif get(handles.algorithm_selection,'Value')==1
@@ -245,49 +272,68 @@ if ok==1
 			if isempty(masks_in_frame)
 				%masks_in_frame=cell(size(slicedfilepath1,2),1);
 				masks_in_frame=cell(1,size(slicedfilepath1,2));
-			end
+            end
+            view_raw=handles.calib_viewtype.Value;
+            if view_raw==1
+                view='valid';
+            elseif view_raw==2
+                view='same';
+            elseif view_raw==3
+                view='full';
+            end
+            cam_use_calibration = gui.retr('cam_use_calibration');
+            cam_use_rectification = gui.retr('cam_use_rectification');
+            cameraParams=gui.retr('cameraParams');
+            rectification_tform = gui.retr('rectification_tform');
 
+            parfor i=1:size(slicedfilepath1,2)
+                %------------------------
+                if exist(fullfile(userpath,'cancel_piv'),'file')
+                    close(hbar);
+                    continue
+                end
 
-			parfor i=1:size(slicedfilepath1,2)
-				%------------------------
-				if exist(fullfile(userpath,'cancel_piv'),'file')
-					close(hbar);
-					continue
-				end
+                [~,~,ext] = fileparts(slicedfilepath1{i});
+                if strcmp(ext,'.b16')
+                    currentimage1=import.f_readB16(slicedfilepath1{i});
+                    currentimage2=import.f_readB16(slicedfilepath2{i});
+                    currentimage1 = preproc.cam_undistort(currentimage1,'cubic',view,cam_use_calibration,cam_use_rectification,cameraParams,rectification_tform);
+                    currentimage2 = preproc.cam_undistort(currentimage2,'cubic',view,cam_use_calibration,cam_use_rectification,cameraParams,rectification_tform);
+                else
+                    currentimage1=import.imread_wrapper(slicedfilepath1{i},slicedframenum1(i),slicedframepart1(i,:));
+                    currentimage2=import.imread_wrapper(slicedfilepath2{i},slicedframenum2(i),slicedframepart2(i,:));
+                    if size(currentimage1,3)>3
+                        currentimage1=currentimage1(:,:,1:3); %Chronos prototype has 4channels (all identical...?)
+                        currentimage2=currentimage2(:,:,1:3); %Chronos prototype has 4channels (all identical...?)
+                    end
+                    currentimage1 = preproc.cam_undistort(currentimage1,'cubic',view,cam_use_calibration,cam_use_rectification,cameraParams,rectification_tform);
+                    currentimage2 = preproc.cam_undistort(currentimage2,'cubic',view,cam_use_calibration,cam_use_rectification,cameraParams,rectification_tform);
+                end
 
-				[~,~,ext] = fileparts(slicedfilepath1{i});
-				if strcmp(ext,'.b16')
-					currentimage1=import.f_readB16(slicedfilepath1{i});
-					currentimage2=import.f_readB16(slicedfilepath2{i});
-				else
-					currentimage1=import.imread_wrapper(slicedfilepath1{i},slicedframenum1(i),slicedframepart1(i,:))
-					currentimage2=import.imread_wrapper(slicedfilepath2{i},slicedframenum2(i),slicedframepart2(i,:))
-				end
+                if numel(masks_in_frame)< i
+                    mask_positions=cell(0);
+                else
+                    mask_positions=masks_in_frame{i};
+                end
+                converted_mask=mask.convert_masks_to_binary(size(currentimage1(:,:,1)),mask_positions);
 
-				if numel(masks_in_frame)< i
-					mask_positions=cell(0);
-				else
-					mask_positions=masks_in_frame{i};
-				end
-				converted_mask=mask.convert_masks_to_binary(size(currentimage1(:,:,1)),mask_positions);
+                if bg_sub==1
+                    if size(currentimage1,3)>1 %color image cannot be displayed properly when bg subtraction is enabled.
+                        currentimage1 = rgb2gray(currentimage1)-bg_img_A;
+                        currentimage2 = rgb2gray(currentimage2)-bg_img_B;
+                    else
+                        currentimage1 = currentimage1-bg_img_A;
+                        currentimage2 = currentimage2-bg_img_B;
+                    end
+                end
 
-				if bg_sub==1
-					if size(currentimage1,3)>1 %color image cannot be displayed properly when bg subtraction is enabled.
-						currentimage1 = rgb2gray(currentimage1)-bg_img_A;
-						currentimage2 = rgb2gray(currentimage2)-bg_img_B;
-					else
-						currentimage1 = currentimage1-bg_img_A;
-						currentimage2 = currentimage2-bg_img_B;
-					end
-				end
+                %get and save the image size (assuming that every image of a session has the same size)
+                currentimage1(currentimage1<0)=0; %bg subtraction may yield negative
+                currentimage2(currentimage2<0)=0; %bg subtraction may yield negative
+                image1=currentimage1;
+                image2=currentimage2;
 
-				%get and save the image size (assuming that every image of a session has the same size)
-				currentimage1(currentimage1<0)=0; %bg subtraction may yield negative
-				currentimage2(currentimage2<0)=0; %bg subtraction may yield negative
-				image1=currentimage1;
-				image2=currentimage2;
-
-				stretcher_A=[]; %initialize for parfor loop
+                stretcher_A=[]; %initialize for parfor loop
 				stretcher_B=[];
 				if autolimit == 1
 					if size(image1,3)>1
@@ -304,17 +350,33 @@ if ok==1
 					stretcher_B(2)=maxintens;
 				end
 
-				image1 = preproc.PIVlab_preproc (image1,roirect,clahe, clahesize,highp,highpsize,intenscap,wienerwurst,wienerwurstsize,stretcher_A(1),stretcher_A(2));
-				image2 = preproc.PIVlab_preproc (image2,roirect,clahe, clahesize,highp,highpsize,intenscap,wienerwurst,wienerwurstsize,stretcher_B(1),stretcher_B(2));
+				image1 = preproc.PIVlab_preproc( ...
+					in=image1, roirect=roirect, clahe=clahe, clahesize=clahesize, ...
+					highp=highp, highpsize=highpsize, intenscap=intenscap, ...
+					wienerwurst=wienerwurst, wienerwurstsize=wienerwurstsize, ...
+					minintens=stretcher_A(1), maxintens=stretcher_A(2));
+				image2 = preproc.PIVlab_preproc( ...
+					in=image2, roirect=roirect, clahe=clahe, clahesize=clahesize, ...
+					highp=highp, highpsize=highpsize, intenscap=intenscap, ...
+					wienerwurst=wienerwurst, wienerwurstsize=wienerwurstsize, ...
+					minintens=stretcher_B(1), maxintens=stretcher_B(2));
 
-				[x, y, u, v, typevector,correlation_map,correlation_matrices] = piv.piv_FFTmulti (image1,image2,interrogationarea, step, subpixfinder, converted_mask, roirect,passes,int2,int3,int4,imdeform,repeat,mask_auto,do_pad,do_correlation_matrices,repeat_last_pass,delta_diff_min); %#ok<PFTUSW>
+				[x, y, u, v, typevector,correlation_map,correlation_matrices,~,u2,v2] = piv.piv_FFTmulti( ...
+					image1=image1, image2=image2, interrogationarea=interrogationarea, step=step, ...
+					subpixfinder=subpixfinder, mask_inpt=converted_mask, roi_inpt=roirect, ...
+					passes=passes, int2=int2, int3=int3, int4=int4, imdeform=imdeform, ...
+					repeat=repeat, mask_auto=mask_auto, do_linear_correlation=do_pad, ...
+					do_correlation_matrices=do_correlation_matrices, ...
+					repeat_last_pass=repeat_last_pass, delta_diff_min=delta_diff_min); %#ok<PFTUSW>
 				xlist{i}=x;
 				ylist{i}=y;
 				ulist{i}=u;
 				vlist{i}=v;
 				typelist{i}=typevector;
 				corrlist{i}=correlation_map;
-				correlation_matrices_list{i}=correlation_matrices;
+				u2list{i}=u2;
+				v2list{i}=v2;
+				%correlation_matrices_list{i}=correlation_matrices;
 				hbar.iterate(1);
 			end
 		end
@@ -335,6 +397,8 @@ if ok==1
 				resultslist{5,i}=typelist{i};
 				resultslist{6,i}=[];
 				resultslist{12,i}=corrlist{i};
+				resultslist{13,i}=u2list{i};
+				resultslist{14,i}=v2list{i};
 			end
 			gui.put('resultslist',resultslist);
 			gui.put('subtr_u', 0);
@@ -377,7 +441,7 @@ if ok==1
 				highpsize=str2double(get(handles.highp_size, 'string'));
 				wienerwurst=get(handles.wienerwurst, 'value');
 				wienerwurstsize=str2double(get(handles.wienerwurstsize, 'string'));
-				do_correlation_matrices=gui.retr('do_correlation_matrices');
+				do_correlation_matrices=0;
 				preproc.Autolimit_Callback
 				minintens=str2double(get(handles.minintens, 'string'));
 				maxintens=str2double(get(handles.maxintens, 'string'));
@@ -401,8 +465,16 @@ if ok==1
 					stretcher_B(2)=maxintens;
 				end
 
-				image1 = preproc.PIVlab_preproc (image1,roirect,clahe, clahesize,highp,highpsize,intenscap,wienerwurst,wienerwurstsize,stretcher_A(1),stretcher_A(2));
-				image2 = preproc.PIVlab_preproc (image2,roirect,clahe, clahesize,highp,highpsize,intenscap,wienerwurst,wienerwurstsize,stretcher_B(1),stretcher_B(2));
+				image1 = preproc.PIVlab_preproc( ...
+					in=image1, roirect=roirect, clahe=clahe, clahesize=clahesize, ...
+					highp=highp, highpsize=highpsize, intenscap=intenscap, ...
+					wienerwurst=wienerwurst, wienerwurstsize=wienerwurstsize, ...
+					minintens=stretcher_A(1), maxintens=stretcher_A(2));
+				image2 = preproc.PIVlab_preproc( ...
+					in=image2, roirect=roirect, clahe=clahe, clahesize=clahesize, ...
+					highp=highp, highpsize=highpsize, intenscap=intenscap, ...
+					wienerwurst=wienerwurst, wienerwurstsize=wienerwurstsize, ...
+					minintens=stretcher_B(1), maxintens=stretcher_B(2));
 							
 				interrogationarea=str2double(get(handles.intarea, 'string'));
 				step=str2double(get(handles.step, 'string'));
@@ -417,10 +489,10 @@ if ok==1
 				end
 
 				converted_mask=mask.convert_masks_to_binary(size(image1(:,:,1)),mask_positions);
-
+				u2=[]; v2=[];
 				if get(handles.algorithm_selection,'Value')==3 %dcc
 					[x, y, u, v, typevector] = piv.piv_DCC (image1,image2,interrogationarea, step, subpixfinder, converted_mask, roirect);
-					correlation_matrices=[];%not available for DCC
+					%correlation_matrices=[];%not available for DCC
 				elseif get(handles.algorithm_selection,'Value')==1
 					passes=1;
 					if get(handles.checkbox26,'value')==1
@@ -439,7 +511,13 @@ if ok==1
 					repeat_last_pass = get(handles.repeat_last,'Value');
 					delta_diff_min = str2double(get(handles.edit52x,'String'));
 					[imdeform, repeat, do_pad] = piv.CorrQuality;
-					[x, y, u, v, typevector,correlation_map,correlation_matrices] = piv.piv_FFTmulti (image1,image2,interrogationarea, step, subpixfinder, converted_mask, roirect,passes,int2,int3,int4,imdeform,repeat,mask_auto,do_pad,do_correlation_matrices,repeat_last_pass,delta_diff_min);
+					[x, y, u, v, typevector,correlation_map,correlation_matrices,~,u2,v2] = piv.piv_FFTmulti( ...
+						image1=image1, image2=image2, interrogationarea=interrogationarea, step=step, ...
+						subpixfinder=subpixfinder, mask_inpt=converted_mask, roi_inpt=roirect, ...
+						passes=passes, int2=int2, int3=int3, int4=int4, imdeform=imdeform, ...
+						repeat=repeat, mask_auto=mask_auto, do_linear_correlation=do_pad, ...
+						do_correlation_matrices=do_correlation_matrices, ...
+						repeat_last_pass=repeat_last_pass, delta_diff_min=delta_diff_min);
 					%u=real(u)
 					%v=real(v)
 				end
@@ -452,8 +530,10 @@ if ok==1
 				if get(handles.algorithm_selection,'Value')==3 %dcc
 					correlation_map=zeros(size(x));
 				end
-				correlation_matrices_list{(i+1)/2}=correlation_matrices;
+				%correlation_matrices_list{(i+1)/2}=correlation_matrices;
 				resultslist{12,(i+1)/2}=correlation_map;
+				resultslist{13,(i+1)/2}=u2;
+				resultslist{14,(i+1)/2}=v2;
 				gui.put('resultslist',resultslist);
 				set(handles.fileselector, 'value', (i+1)/2);
 				%set(handles.progress, 'string' , ['Frame progress: 100%'])
@@ -505,9 +585,8 @@ if ok==1
 		disp('https://groups.google.com/g/PIVlab/c/2O2EXgGg6Uc')
 		disp(ME)
 	end
-	assignin('base','correlation_matrices',correlation_matrices_list);
+	%assignin('base','correlation_matrices',correlation_matrices_list);
 end
 gui.toolsavailable(1);
 gui.update_progress(0)
 gui.sliderdisp(gui.retr('pivlab_axis'))
-

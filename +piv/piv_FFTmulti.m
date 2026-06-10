@@ -1,13 +1,70 @@
-function [xtable, ytable, utable, vtable, typevector, correlation_map,correlation_matrices] = piv_FFTmulti (image1,image2,interrogationarea, step, subpixfinder, mask_inpt, roi_inpt,passes,int2,int3,int4,imdeform,repeat,mask_auto,do_linear_correlation,do_correlation_matrices,repeat_last_pass,delta_diff_min)
-% For unittests
-if nargin == 0
-	xtable = localfunctions;
-	return
+function [xtable, ytable, utable, vtable, typevector, correlation_map, correlation_matrices, all_xy_tables, utable2, vtable2] = piv_FFTmulti(opts)
+arguments
+	opts.image1
+	opts.image2
+	opts.interrogationarea
+	opts.step = []
+	opts.subpixfinder = 1
+	opts.mask_inpt = []
+	opts.roi_inpt = []
+	opts.passes = 1
+	opts.int2 = []
+	opts.int3 = []
+	opts.int4 = []
+	opts.imdeform = '*linear'
+	opts.repeat = 0
+	opts.mask_auto = 0
+	opts.do_linear_correlation = 0
+	opts.do_correlation_matrices = 0
+	opts.repeat_last_pass = 0
+	opts.delta_diff_min = 0.025
+	opts.limit_peak_search_area = 1
 end
+% Note to myself: I have experimented with windowing functions and other enhancements found e.g. in PIVsuite. But they all perform worse (higher rmse and bias and less yield) than this code. Symmetric deformation also performs worse,
+required_fields = {'image1', 'image2', 'interrogationarea'};
+if ~all(isfield(opts, required_fields))
+	error('piv:piv_FFTmulti:MissingRequiredInputs', ...
+		'image1, image2, and interrogationarea must be provided as name-value arguments.')
+end
+
+image1 = opts.image1;
+image2 = opts.image2;
+interrogationarea = opts.interrogationarea;
+if isempty(opts.step)
+	step = interrogationarea / 2;
+else
+	step = opts.step;
+end
+subpixfinder = opts.subpixfinder;
+mask_inpt = opts.mask_inpt;
+roi_inpt = opts.roi_inpt;
+passes = opts.passes;
+if isempty(opts.int2)
+	int2 = interrogationarea / 2;
+else
+	int2 = opts.int2;
+end
+if isempty(opts.int3)
+	int3 = int2 / 2;
+else
+	int3 = opts.int3;
+end
+if isempty(opts.int4)
+	int4 = int3 / 2;
+else
+	int4 = opts.int4;
+end
+imdeform = opts.imdeform;
+repeat = opts.repeat;
+mask_auto = opts.mask_auto;
+do_linear_correlation = opts.do_linear_correlation;
+do_correlation_matrices = opts.do_correlation_matrices;
+repeat_last_pass = opts.repeat_last_pass;
+delta_diff_min = opts.delta_diff_min;
 
 %profile on
 %this funtion performs the  PIV analysis.
-limit_peak_search_area=1; %new in 2.41: Default is to limit the peak search area in pass 2-4.
+limit_peak_search_area=opts.limit_peak_search_area; %new in 2.41: Default is to limit the peak search area in pass 2-4.
 if repeat == 0
 	convert_image_class_type = 'single'; % 'single', 'double': do the cross-correlation with single and not double precision. Saves 50% memory.
 else %repeted correlation needs double as type
@@ -34,6 +91,10 @@ else
 	mask_inpt_roi = mask_inpt;
 end
 
+if do_correlation_matrices==1
+	correlation_matrices=cell(0);
+end
+
 %% Convert image classes (if desired) to save RAM in the FFT correlation with huge images
 image1_roi = convert_image_class(image1_roi, convert_image_class_type);
 image2_roi = convert_image_class(image2_roi, convert_image_class_type);
@@ -54,6 +115,10 @@ repetition=0;
 %repeat_last_pass=0; %set in GUI: enable repetition of last pass
 %delta_diff_min=0.025;  %set in GUI: the quality increase from one pass to the other should at least be this good. This is sort of the slope of the "quality"
 delta_diff=1; %initialize with bad value
+all_xy_tables=cell(passes,2);
+utable2 = [];
+vtable2 = [];
+symmetric_deformation = 0; % 0 = asymmetric (deform B only), 1 = symmetric (deform A by -0.5*disp, B by +0.5*disp)
 for multipass = 1:passes
 	%this while loop will run at least once. when repeat_last_pass is 0, then the while loop will break after the first execution.
 	while  delta_diff > delta_diff_min && repetition < max_repetitions
@@ -66,8 +131,9 @@ for multipass = 1:passes
 			%multipass validation, smoothing
 			utable_orig=utable;
 			vtable_orig=vtable;
-			[utable,vtable] = postproc.PIVlab_postproc (utable,vtable,[],[], [], 1,4, 1,3);
-
+			[utable,vtable] = postproc.PIVlab_postproc( ...
+				u=utable, v=vtable, valid_vel=[], do_stdev_check=1, stdthresh=8, ...
+				do_local_median=1, neigh_thresh=5);
 			maskedpoints=numel(find((typevector)==0));
 			amountnans=numel(find(isnan(utable)))-maskedpoints;
 			discarded=amountnans/(size(utable,1)*size(utable,2))*100;
@@ -97,6 +163,7 @@ for multipass = 1:passes
 						beep on
 						beep
 						if ~isdeployed
+                            %#exclude commandwindow
 							commandwindow
 						end
 					end
@@ -109,8 +176,8 @@ for multipass = 1:passes
 				vtable=misc.inpaint_nans(vtable,4);
 				%smooth predictor
 				if multipass < passes
-					utable = misc.smoothn(utable,0.9); %stronger smoothing for first passes
-					vtable = misc.smoothn(vtable,0.9);
+					utable = misc.smoothn(utable,4); %stronger smoothing for first passes
+					vtable = misc.smoothn(vtable,4);
 				else
 					utable = misc.smoothn(utable); %weaker smoothing for last pass(nb: BEFORE the image deformation. So the output is not smoothed!)
 					vtable = misc.smoothn(vtable);
@@ -189,10 +256,16 @@ for multipass = 1:passes
 			utable = zeros(numelementsy,numelementsx, 'single');
 			vtable = zeros(numelementsy,numelementsx, 'single');
 		end
+		if multipass == passes
+			utable2 = NaN(numelementsy, numelementsx, 'single');
+			vtable2 = NaN(numelementsy, numelementsx, 'single');
+		end
 		xtable_old = xtable(1,:);
 		ytable_old = ytable(:,1);
 		xtable = single(repmat((minix:step:maxix)  + xroi - padx_orig + interrogationarea/2, numelementsy, 1));
 		ytable = single(repmat((miniy:step:maxiy)' + yroi - pady_orig + interrogationarea/2, 1, numelementsx));
+		all_xy_tables{multipass,1}=xtable;
+		all_xy_tables{multipass,2}=ytable;
 		if multipass > 1
 			%xtable alt und neu geben koordinaten wo die vektoren herkommen.
 			%d.h. u und v auf die gewÃ¯Â¿Â½nschte grÃ¯Â¿Â½Ã¯Â¿Â½e bringen+interpolieren
@@ -200,9 +273,9 @@ for multipass = 1:passes
 				utable=interp2(xtable_old,ytable_old,utable,xtable,ytable,'*spline');
 				vtable=interp2(xtable_old,ytable_old,vtable,xtable,ytable,'*spline');
 			catch
-				%msgbox('Error: Most likely, your ROI is too small and/or the interrogation area too large.','modal')
 				disp('Error: Most likely, your ROI is too small and/or the interrogation area too large.')
 				if ~isdeployed
+                    %#exclude commandwindow
 					commandwindow
 				end
 				utable=zeros(size(xtable));
@@ -217,24 +290,27 @@ for multipass = 1:passes
 
 			X1 = (X(1):1:X(end)-1);
 			Y1 = (Y(1):1:Y(end)-1)';
-			X2 = interp2(X,Y,U,X1,Y1,'*linear') + repmat(X1,size(Y1, 1),1);
-			Y2 = interp2(X,Y,V,X1,Y1,'*linear') + repmat(Y1,1,size(X1, 2));
-
-			%symmetric interpolation of image A and B
-			%X2 = interp2(X,Y,U*0.5,X1,Y1,'*linear') + repmat(X1,size(Y1, 1),1);
-			%Y2 = interp2(X,Y,V*0.5,X1,Y1,'*linear') + repmat(Y1,1,size(X1, 2));
-			%X2_2 = interp2(X,Y,U*-0.5,X1,Y1,'*linear') + repmat(X1,size(Y1, 1),1);
-			%Y2_2 = interp2(X,Y,V*-0.5,X1,Y1,'*linear') + repmat(Y1,1,size(X1, 2));
+			if symmetric_deformation
+				X2   = interp2(X,Y,U* 0.5,X1,Y1,'*linear') + repmat(X1,size(Y1,1),1);
+				Y2   = interp2(X,Y,V* 0.5,X1,Y1,'*linear') + repmat(Y1,1,size(X1,2));
+				X2_2 = interp2(X,Y,U*-0.5,X1,Y1,'*linear') + repmat(X1,size(Y1,1),1);
+				Y2_2 = interp2(X,Y,V*-0.5,X1,Y1,'*linear') + repmat(Y1,1,size(X1,2));
+			else
+				X2 = interp2(X,Y,U,X1,Y1,'*linear') + repmat(X1,size(Y1,1),1);
+				Y2 = interp2(X,Y,V,X1,Y1,'*linear') + repmat(Y1,1,size(X1,2));
+			end
 		end
-		% interpolate image2_roi
+		% interpolate image2_roi (and image1_roi when symmetric_deformation is enabled)
 		if multipass == 1
 			image2_crop_i1 = image2_roi(miniy:maxiy+interrogationarea-1, minix:maxix+interrogationarea-1);
-			%symmetric interpolation of image A and B
-			%image1_crop_i1 = image1_roi(miniy:maxiy+interrogationarea-1, minix:maxix+interrogationarea-1);
+			if symmetric_deformation
+				image1_crop_i1 = image1_roi(miniy:maxiy+interrogationarea-1, minix:maxix+interrogationarea-1);
+			end
 		else
-			%symmetric interpolation of image A and B
-			%image1_crop_i1 = interp2(image_roi_xs,image_roi_ys,image1_roi,X2_2,Y2_2,imdeform); %linear is 3x faster and looks ok...
-			image2_crop_i1 = interp2(image_roi_xs,image_roi_ys,image2_roi,X2,Y2,imdeform); %linear is 3x faster and looks ok...
+			image2_crop_i1 = interp2(image_roi_xs,image_roi_ys,image2_roi,X2,  Y2,  imdeform);
+			if symmetric_deformation
+				image1_crop_i1 = interp2(image_roi_xs,image_roi_ys,image1_roi,X2_2,Y2_2,imdeform);
+			end
 		end
 		N = numelementsx * numelementsy;
 		result_conv = zeros([interrogationarea, interrogationarea, N], convert_image_class_type);
@@ -259,9 +335,11 @@ for multipass = 1:passes
 				[y, x] = ind2sub([numelementsy numelementsx], batch_offset+i);
 				xs = (1:interrogationarea) + (x-1) * step;
 				ys = (1:interrogationarea) + (y-1) * step;
-				image1_cut(:,:,i) = image1_roi(miniy-1+ys, minix-1+xs);
-				%symmetric interpolation of image A and B
-				%image1_cut(:,:,i) = image1_crop_i1(ys, xs);
+				if symmetric_deformation
+					image1_cut(:,:,i) = image1_crop_i1(ys, xs);
+				else
+					image1_cut(:,:,i) = image1_roi(miniy-1+ys, minix-1+xs);
+				end
 				image2_cut(:,:,i) = image2_crop_i1(ys, xs);
 			end
 			% Calculate correlation strength on the last pass
@@ -368,6 +446,9 @@ for multipass = 1:passes
 			%estimated displacement is correct. If we limit the maximum acceptable
 			%deviation from this initial guess in later passes, then the result is
 			%generally more likely to be correct.
+			if multipass == passes
+				result_conv_full = result_conv; % save before spatial restriction for 2nd peak search
+			end
 			if limit_peak_search_area == 1
 				if floor(size(result_conv,1)/3) >= 3 %if the interrogation area becomes too small, then further limiting of the search area doesnt make sense, because the peak may become as big as the search area
 					if mask_auto == 1 %more restricted when "disable autocorrelation" is enabled
@@ -418,6 +499,10 @@ for multipass = 1:passes
 		masked_ys = (miniy:step:maxiy) + round(interrogationarea/2);
 		typevector(mask(masked_ys, masked_xs)) = 0;
 		result_conv(:, :, mask(masked_ys, masked_xs)) = 0;
+		if multipass == passes && multipass > 1
+			result_conv_full = rescale_array(result_conv_full);
+			result_conv_full(:, :, mask(masked_ys, masked_xs)) = 0;
+		end
 		if multipass == passes
 			correlation_map(mask(masked_ys, masked_xs)) = 0;
 		end
@@ -438,14 +523,87 @@ for multipass = 1:passes
 		z1 = z(zi(i0));
 
 		if subpixfinder==1
-			[vector] = SUBPIXGAUSS(result_conv, interrogationarea_center, x1, y1, z1);
+			[vector, sigma1] = SUBPIXGAUSS(result_conv, interrogationarea_center, x1, y1, z1);
 		elseif subpixfinder==2
-			[vector] = SUBPIX2DGAUSS(result_conv, interrogationarea_center, x1, y1, z1);
+			[vector, sigma1] = SUBPIX2DGAUSS(result_conv, interrogationarea_center, x1, y1, z1);
 		end
 		vector = single(reshape(vector, [size(xtable) 2]));
 
 		utable = utable + vector(:,:,1);
 		vtable = vtable + vector(:,:,2);
+
+		if multipass == passes
+			ia_half = floor(double(interrogationarea)/2 - 1);
+			% Source plane for second peak: unrestricted for passes > 1 so that
+			% limit_peak_search_area does not also restrict the second peak search.
+			% rc_src is a reference (no copy) until SUBPIXGAUSS reads it.
+			if multipass > 1
+				rc_src = result_conv_full;
+			else
+				rc_src = result_conv;
+			end
+
+			ia_h = size(rc_src, 1);
+			ia_w = size(rc_src, 2);
+			N2   = size(rc_src, 3);
+
+			% Per-window Gaussian sigma for suppression of first peak.
+			s_vec = double(sigma1(z1));
+			s_vec(~isfinite(s_vec) | s_vec <= 0) = double(ia_half) / 3;
+
+			% Find second-peak integer position using Gaussian suppression of
+			% peak 1, processed in chunks to avoid a large [ia x ia x N_win]
+			% temporary. The suppressed plane is never stored in full; only the
+			% per-window max value and index are accumulated.
+			% SUBPIXGAUSS later uses the unsuppressed rc_src directly: peak 2
+			% is always >= 3*sigma from peak 1, so suppression there is < 0.1%
+			% and has no effect on the sub-pixel fit.
+			max_vals2 = zeros(N2, 1, 'single');
+			max_idx2  = ones(N2,  1, 'uint32');
+			[gx, gy]  = meshgrid(1:ia_w, 1:ia_h);   % shared pixel-coord grids
+
+			chunk_size = 5000;
+			for chunk_start = 1:chunk_size:numel(z1)
+				chunk_end = min(chunk_start + chunk_size - 1, numel(z1));
+				cidx = chunk_start:chunk_end;
+				nc   = numel(cidx);
+				wk   = z1(cidx);
+
+				sk     = reshape(s_vec(cidx),       1, 1, nc);
+				dy     = gy - reshape(double(y1(cidx)), 1, 1, nc);
+				dx     = gx - reshape(double(x1(cidx)), 1, 1, nc);
+				rc_c   = double(rc_src(:,:,wk)) .* (1 - exp(-(dy.^2 + dx.^2) ./ (2*sk.^2)));
+
+				% Exclude border pixels so the sub-pixel estimator always has
+				% neighbours. Pass 1 is already restricted via limit_peak_search_area.
+				if multipass > 1
+					rc_c([1 end], :, :) = 0;
+					rc_c(:, [1 end], :) = 0;
+				end
+
+				[mv, mi]         = max(reshape(rc_c, [], nc), [], 1);
+				max_vals2(wk)    = single(mv(:));
+				max_idx2(wk)     = uint32(mi(:));
+			end
+
+			[y2_all, x2_all] = ind2sub([ia_h, ia_w], double(max_idx2));
+			z2_all = (1:N2)';
+
+			valid2 = max_vals2 > 0;
+			x2 = x2_all(valid2);
+			y2 = y2_all(valid2);
+			z2 = z2_all(valid2);
+
+			if subpixfinder == 1
+				[vector2] = SUBPIXGAUSS(rc_src, interrogationarea_center, x2, y2, z2);
+			elseif subpixfinder == 2
+				[vector2] = SUBPIX2DGAUSS(rc_src, interrogationarea_center, x2, y2, z2);
+			end
+			vector2 = single(reshape(vector2, [size(xtable) 2]));
+
+			utable2 = (utable - vector(:,:,1)) + vector2(:,:,1);
+			vtable2 = (vtable - vector(:,:,2)) + vector2(:,:,2);
+		end
 
 		%compare result to previous pass, do extra passes when delta is not around zero.
 		if repetition > 1 %only then we'll have an utable with the same dimension
@@ -467,9 +625,12 @@ for multipass = 1:passes
 			break
 		end
 	end
-
+	if do_correlation_matrices
+		correlation_matrices{multipass}=result_conv;
+	else
+		correlation_matrices=[];
+	end
 end
-
 %{
 %mal alle daten die ich brauche speichern. Als Beispielsatz. Dann damit experimentieren wie in echt...
 %% Hier uncertainty...?
@@ -553,24 +714,18 @@ figure(getappdata(0,'hgui'))
 %gg=100;figure;imagesc(multiplied_images(:,:,gg));figure;imagesc(image1_cut(:,:,gg));figure;imagesc(image2_cut(:,:,gg));figure;imagesc(multiplied_images_binary(:,:,gg))
 %}
 
-
-% Output correlation matrices
-if do_correlation_matrices==1
-	correlation_matrices=result_conv;
-else
-	correlation_matrices = [];
-end
 end
 
 
 %%{
-function [vector] = SUBPIXGAUSS(result_conv, interrogationarea_center, x, y, z)
+function [vector, sigma] = SUBPIXGAUSS(result_conv, interrogationarea_center, x, y, z)
 xi = find(~((x <= (size(result_conv,2)-1)) & (y <= (size(result_conv,1)-1)) & (x >= 2) & (y >= 2)));
 x(xi) = [];
 y(xi) = [];
 z(xi) = [];
 xmax = size(result_conv, 2);
 vector = NaN(size(result_conv,3), 2);
+sigma  = NaN(size(result_conv,3), 1);
 if(numel(x)~=0)
 	ip = sub2ind(size(result_conv), y, x, z);
 	%the following 8 lines are copyright (c) 1998, Uri Shavit, Roi Gurka, Alex Liberzon, Technion Ã¯Â¿Â½ Israel Institute of Technology
@@ -579,6 +734,7 @@ if(numel(x)~=0)
 	f1 = log(result_conv(ip-1));
 	f2 = log(result_conv(ip+1));
 	peaky = y + (f1-f2)./(2*f1-4*f0+2*f2);
+	sigma(z) = real(sqrt(-2 ./ (2*f1-4*f0+2*f2)));
 	f0 = log(result_conv(ip));
 	f1 = log(result_conv(ip-xmax));
 	f2 = log(result_conv(ip+xmax));
@@ -616,13 +772,14 @@ end
 end
 %}
 
-function [vector] = SUBPIX2DGAUSS(result_conv, interrogationarea_center, x, y, z)
+function [vector, sigma] = SUBPIX2DGAUSS(result_conv, interrogationarea_center, x, y, z)
 xi = find(~((x <= (size(result_conv,2)-1)) & (y <= (size(result_conv,1)-1)) & (x >= 2) & (y >= 2)));
 x(xi) = [];
 y(xi) = [];
 z(xi) = [];
 xmax = size(result_conv, 2);
 vector = NaN(size(result_conv,3), 2);
+sigma  = NaN(size(result_conv,3), 1);
 if(numel(x)~=0)
 	c10 = zeros(3,3, length(z));
 	c01 = c10;
@@ -665,6 +822,10 @@ if(numel(x)~=0)
 	vector(z, :) = [SubpixelX, SubpixelY];
 	max_displace=size(result_conv,1)/2;
 	vector(vector > max_displace)=nan;
+
+	sx = real(sqrt(-1 ./ (2*squeeze(c20))));
+	sy = real(sqrt(-1 ./ (2*squeeze(c02))));
+	sigma(z) = max(sx, sy);
 end
 end
 
@@ -779,20 +940,6 @@ end
 %	result_conv(:,:,i) = fftshift(fftshift(real(ifft2(conj(fft2(image1_cut(:,:,i))).*fft2(image2_cut(:,:,i)))), 1), 2);
 %end
 
-%% Check whether a shifted version of an array is correctly detected
-function test_do_correlations(testCase)
-shift_amount = [6 1];
-rng(0);
-A = rand(20);
-B = circshift(A, shift_amount);
-result = fftshift(fftshift(do_correlations(A, B, false, 0), 1), 2);
-[~, l] = max(result(:));
-[i, j] = ind2sub(size(A), l);
-% After fftshift, the location [1 1] in the result denotes the unshifted correlation
-testCase.verifyEqual([i j], shift_amount + [1 1]);
-end
-
-
 %% Calculate correlation coeficients for a stack of image pairs
 function corr_map = calculate_correlation_map(img1, img2)
 validateattributes(img1, {'numeric'}, {'real','3d'}, mfilename, 'img1', 1);
@@ -813,45 +960,3 @@ for i=1:N
 end
 end
 
-%% Checks for calculate_correlation_map()
-function test_calculate_correlation_map(testCase)
-rng(0);
-A = rand(100);
-% Test correlation of matrix with itself is 1.0
-testCase.verifyEqual(calculate_correlation_map(A, A), 1);
-B = eye(100);
-% Test correlation coefficient is independent of matrix scaling and offset
-testCase.verifyEqual(calculate_correlation_map(A, B), calculate_correlation_map(3*A-2, B), 'AbsTol', 1e-16);
-% Test calculate_correlation_map() is equal to the corr2() function it replaces
-testCase.verifyEqual(corr2(A, B), calculate_correlation_map(A, B), 'AbsTol', 1e-16);
-end
-
-
-%% Check simple velocity field
-% This test was added to check the improved uvtable interpolation
-function test_piv_FFTmulti_uv_interpolation(testCase)
-rng(0);
-N = 480;
-Np = 200;
-% Generate two N*N images with a Np*Np patch in the middle
-patch = rand(Np);
-A = rand(N); B = A;
-Pstart = (N-Np)/2+1; Pend = (N+Np)/2;
-A(Pstart:Pend, Pstart:Pend) = patch;
-B((Pstart:Pend)-25, (Pstart:Pend)+20) = patch; % The patch is shifted by (-25, 20) for the second image
-% Smooth images
-A = medfilt2(A, [9 9], 'symmetric');
-B = medfilt2(B, [9 9], 'symmetric');
-% Calculate velocity vectors
-[xtable, ytable, utable, vtable] = piv.piv_FFTmulti(A, B, 80, 40, 1, [], [], 3, 40, 20, 0, '*linear', 0, 0, 0, 0, 0, 0);
-testCase.assertFalse(any(isnan(utable(:))));
-testCase.assertFalse(any(isnan(vtable(:))));
-% Verify that velocity vectors are close to actual solution
-center_mask = (Pstart <= xtable) .* (xtable <= Pend) .* (Pstart <= ytable) .* (ytable <= Pend);
-utable_ref = zeros(size(utable)) + 20*center_mask;
-vtable_ref = zeros(size(vtable)) + -25*center_mask;
-utable_rms_error = rms(utable-utable_ref, 'all', 'omitnan');
-vtable_rms_error = rms(vtable-vtable_ref, 'all', 'omitnan');
-testCase.verifyLessThan(utable_rms_error, 5);
-testCase.verifyLessThan(vtable_rms_error, 5);
-end

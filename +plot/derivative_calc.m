@@ -27,20 +27,19 @@ if size(resultslist,2)>=frame && numel(resultslist{1,frame})>0 %analysis exists
 		typevector=resultslist{5,frame};
 	end
 	if get(handles.interpol_missing,'value')==1
-		if any(any(isnan(u))) || any(any(isnan(v)))
-			if isempty(strfind(get(handles.apply_deriv_all,'string'), 'Please'))==1 && isempty(strfind(get(handles.ascii_all,'string'), 'Please'))==1 && isempty(strfind(get(handles.save_mat_all,'string'), 'Please'))==1%not in batch
-				drawnow;
-				if gui.retr('alreadydisplayed') == 1
-				else
-					msgbox('Your dataset contains NaNs. A vector interpolation will be performed automatically to interpolate missing vectors.', 'modal')
-					uiwait
-				end
-				gui.put('alreadydisplayed',1);
-			end
-			typevector_original=typevector;
-			u(isnan(v))=NaN;
-			v(isnan(u))=NaN;
-			typevector(isnan(u))=2;
+        if any(any(isnan(u))) || any(any(isnan(v)))
+            if isempty(strfind(get(handles.apply_deriv_all,'string'), 'Please'))==1 && isempty(strfind(get(handles.ascii_all,'string'), 'Please'))==1 && isempty(strfind(get(handles.save_mat_all,'string'), 'Please'))==1%not in batch
+                drawnow;
+                if gui.retr('alreadydisplayed') == 1
+                else
+                    gui.custom_msgbox('msg',getappdata(0,'hgui'),'NaNs','Your dataset contains NaNs. A vector interpolation will be performed automatically to interpolate missing vectors.','modal',{'OK'},'OK');
+                end
+                gui.put('alreadydisplayed',1);
+            end
+            typevector_original=typevector;
+            u(isnan(v))=NaN;
+            v(isnan(u))=NaN;
+            typevector(isnan(u))=2;
 			typevector(typevector_original==0)=0;
 			u=misc.inpaint_nans(u,4);
 			v=misc.inpaint_nans(v,4);
@@ -54,8 +53,7 @@ if size(resultslist,2)>=frame && numel(resultslist{1,frame})>0 %analysis exists
 			drawnow;
 			if gui.retr('alreadydisplayed') == 1
 			else
-				msgbox('Your dataset contains NaNs. Derived parameters will have a lot of missing data. Redo the vector validation with the option to interpolate missing data turned on.', 'modal')
-				uiwait
+				gui.custom_msgbox('msg',getappdata(0,'hgui'),'NaNs','Your dataset contains NaNs. Derived parameters will have a lot of missing data. Redo the vector validation with the option to interpolate missing data turned on.','modal',{'OK'},'OK');
 			end
 			gui.put('alreadydisplayed',1);
 		end
@@ -63,14 +61,20 @@ if size(resultslist,2)>=frame && numel(resultslist{1,frame})>0 %analysis exists
 	if get(handles.smooth, 'Value') == 1
 		smoothfactor=floor(get(handles.smoothstr, 'Value'));
 		try
-			if get(handles.algorithm_selection,'Value')~=4 %not optical flow
-				u = misc.smoothn(u,smoothfactor/10); 
-				v = misc.smoothn(v,smoothfactor/10); 
-			else %optical flow
-				u = misc.smoothn(u,smoothfactor/10*20); 
-				v = misc.smoothn(v,smoothfactor/10*20); 
-			end
-			%clc
+            u_old=u;
+            v_old=v;
+            if get(handles.algorithm_selection,'Value')~=4 %not optical flow
+                u = misc.smoothn(u,smoothfactor/10);
+                v = misc.smoothn(v,smoothfactor/10);
+            else %optical flow
+                u = misc.smoothn(u,smoothfactor/10*20);
+                v = misc.smoothn(v,smoothfactor/10*20);
+            end
+            if get(handles.interpol_missing,'value')==0 %user does not want to interpolate missing data, but wants to smooth anyway
+                u(isnan(u_old))=nan;
+                v(isnan(v_old))=nan;
+            end
+            %clc
 			%disp ('Using smoothn.m from Damien Garcia for data smoothing.')
 			%disp (['Input smoothing parameter S for smoothn is: ' num2str(smoothfactor/10)])
 			%disp ('see the documentation here: https://de.mathworks.com/matlabcentral/fileexchange/25634-smoothn')

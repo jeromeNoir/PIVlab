@@ -1,10 +1,10 @@
 function capture_images_Callback(~,~,~) %Menu item is called
 filepath = fileparts(which('PIVlab_GUI.m'));
-gui.switchui('multip24')
 acquisition.select_capture_config_Callback
-
+gui.switchui('multip24')
 if verLessThan('matlab','9.7') %R2019b
-	uiwait(msgbox('Image capture and synchronizer control in PIVlab requires at least MATLAB version 9.7 (R2019b).','modal'))
+	gui.custom_msgbox('error',getappdata(0,'hgui'),'Newer Matlab required','Image capture and synchronizer control in PIVlab requires at least MATLAB version 9.7 (R2019b).', 'modal');
+    return
 end
 handles=gui.gethand;
 if isempty(get(handles.ac_project,'String')) %if user hasnt entered a project path...
@@ -59,24 +59,22 @@ gui.put('ac_lower_clim',0);
 gui.put('ac_upper_clim',2^16);
 delete(findobj('tag','shortcutlist'));
 %Keyboard shortcuts
-text(10,10,['Image acquisition keyboard shortcuts' sprintf('\n') 'CTRL SHIFT C : Toggle crosshair' sprintf('\n') 'CTRL SHIFT X : Toggle sharpness measure' sprintf('\n') 'CTRL SHIFT + : Increase display brightness' sprintf('\n') 'CTRL SHIFT - : Decrease display brightness' sprintf('\n') 'CTRL SHIFT K : Toggle between log and lin color scale' sprintf('\n') 'CTRL SHIFT H : Toggle histogram display'],'tag','shortcutlist','Color','black','BackgroundColor','white','VerticalAlignment','top');
-try
-	if ~alreadyconnected
-		if ispref('PIVlab_ad','enable_ad') &&  getpref('PIVlab_ad','enable_ad') ==0
-			%do not display ad
-		else
-			if exist('laser_device_id.mat','file') ~= 2
-				misc.hardware_Ad
-			end
-		end
-	end
-catch
-end
+%text(10,10,['Image acquisition keyboard shortcuts' sprintf('\n') 'CTRL SHIFT C : Toggle crosshair' sprintf('\n') 'CTRL SHIFT X : Toggle sharpness measure' sprintf('\n') 'CTRL SHIFT + : Increase display brightness' sprintf('\n') 'CTRL SHIFT - : Decrease display brightness' sprintf('\n') 'CTRL SHIFT K : Toggle between log and lin color scale' sprintf('\n') 'CTRL SHIFT H : Toggle histogram display'],'tag','shortcutlist','Color','black','BackgroundColor','white','VerticalAlignment','top');
 if gui.retr('parallel')==1
-	button = questdlg('It is highly recommended to turn off parallel processing during image capture to save RAM.','Shut down parallel pool?','OK','Cancel','OK');
+	button = gui.custom_msgbox('quest',getappdata(0,'hgui'),'Shut down parallel pool?','It is highly recommended to turn off parallel processing during image capture to save RAM.','modal',{'OK','Cancel'},'OK');
 	if strncmp(button,'OK',3)==1
 		gui.put('parallel',1); %sets to "parallel on" and then presses the toggle button --> will turn off.
 		misc.toggle_parallel_Callback
 	end
+end
+try
+	if ~alreadyconnected
+		if exist('laser_device_id.mat','file') ~= 2 %after a frist connection to a synchronizer, this will not be shown anymore.
+			misc.hardware_Ad
+		else
+			gui.displogo
+		end
+	end
+catch
 end
 

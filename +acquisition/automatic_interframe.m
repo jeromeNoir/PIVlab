@@ -1,6 +1,5 @@
 function [suggested_interframe] = automatic_interframe(~,~,~)
-
-button = questdlg('This will switch on the laser!','Warning','OK','Cancel','Cancel');
+button = gui.custom_msgbox('quest',getappdata(0,'hgui'),'Warning','This will switch on the laser!','modal',{'OK','Cancel'},'Cancel');
 if strmatch(button,'OK')==1
     hgui=getappdata(0,'hgui');
     setappdata(hgui,'cancel_capture',0);
@@ -59,7 +58,9 @@ if strmatch(button,'OK')==1
             OPTRONIS_data = getdata(OPTRONIS_vid,imageamount);
             [~, ~, u, v] = piv.piv_quick(OPTRONIS_data(:,:,:,1),OPTRONIS_data(:,:,:,2),128, 128);
 
-            [u,v] = postproc.PIVlab_postproc (u,v,[],[], [], 1,6,1,3); %validate results
+[u,v] = postproc.PIVlab_postproc( ...
+    u=u, v=v, valid_vel=[], do_stdev_check=1, stdthresh=6, ...
+    do_local_median=1, neigh_thresh=3); %validate results
 
             magn=(u.^2+v.^2).^0.5;
             displ=max(magn(:),[],'omitnan')

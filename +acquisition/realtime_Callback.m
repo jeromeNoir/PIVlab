@@ -32,8 +32,9 @@ if get(handles.ac_realtime,'Value')==1
 			end
 		end
 		gui.put('capturing',0);
-		uiwait(msgbox(['Please select the ROI for real-time PIV.'],'modal'))
-		roirect = round(getrect(gca));
+        gui.custom_msgbox('error',getappdata(0,'hgui'),'Select ROI',['Please select the ROI for real-time PIV.'],'modal');
+		target_axis=gui.retr('pivlab_axis');
+		roirect = round(getrect(target_axis));
 		if roirect(1,3)~=0 && roirect(1,4)~=0
 			gui.put('ac_ROI_realtime',roirect);
 			gui.put('do_realtime',1);

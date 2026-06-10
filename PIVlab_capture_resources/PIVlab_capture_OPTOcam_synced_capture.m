@@ -4,7 +4,7 @@ OPTOcam_climits=2^bitmode;
 hgui=getappdata(0,'hgui');
 image_handle_OPTOcam=getappdata(hgui,'image_handle_OPTOcam');
 OutputError=0;
-
+OPTOcam_settings = get(OPTOcam_vid);
 OPTOcam_frames_to_capture = nr_of_images*2;
 set(frame_nr_display,'backgroundcolor','k');
 %% capture data
@@ -24,9 +24,7 @@ while OPTOcam_vid.FramesAcquired < (OPTOcam_frames_to_capture) &&  getappdata(hg
     %% sharpness indicator
     sharpness_enabled = getappdata(hgui,'sharpness_enabled');
     if sharpness_enabled == 1 % sharpness indicator
-        textx=1240;
-        texty=950;
-        [~,~] = PIVlab_capture_sharpness_indicator (ima,textx,texty);
+        [~,~] = PIVlab_capture_sharpness_indicator (ima,1);
     else
         delete(findobj('tag','sharpness_display_text'));
     end
@@ -114,7 +112,7 @@ while OPTOcam_vid.FramesAcquired < (OPTOcam_frames_to_capture) &&  getappdata(hg
                     if toc(delay_time_1)>=delay_time %only every second image is taken for analysis. This gives more time to the servo to reach position
                         delay_time_1=tic;
                         sharp_loop_cnt=sharp_loop_cnt+1;
-                        [sharpness,~] = PIVlab_capture_sharpness_indicator (ima,[],[]);
+                        [sharpness,~] = PIVlab_capture_sharpness_indicator (ima,0);
                         sharpness_focus_table(sharp_loop_cnt,1)=focus;
                         sharpness_focus_table(sharp_loop_cnt,2)=sharpness;
                         focus=focus+focus_step_raw;
@@ -164,7 +162,7 @@ while OPTOcam_vid.FramesAcquired < (OPTOcam_frames_to_capture) &&  getappdata(hg
                         if toc(delay_time_1)>=delay_time %only every second image is taken for analysis. This gives more time to the servo to reach position
                             delay_time_1=tic;
                             sharp_loop_cnt=sharp_loop_cnt+1;
-                            [sharpness,~] = PIVlab_capture_sharpness_indicator (ima,[],[]);
+                            [sharpness,~] = PIVlab_capture_sharpness_indicator (ima,0);
                             sharpness_focus_table(sharp_loop_cnt,1)=focus;
                             sharpness_focus_table(sharp_loop_cnt,2)=sharpness;
                             %original focus=focus-focus_step_fine;
@@ -214,6 +212,8 @@ end
 
 stoppreview(OPTOcam_vid)
 stop(OPTOcam_vid);
+executeCommand(OPTOcam_settings.Source,"BslSensorOff")
+disp('Sending sensor to sleep mode.')
 
 if ~isinf(OPTOcam_frames_to_capture)
     set(frame_nr_display,'String',['Image nr.: ' int2str(round(OPTOcam_vid.FramesAcquired/2))]);

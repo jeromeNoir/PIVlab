@@ -1,13 +1,42 @@
 function piv_capture_Callback(~,~,~)
-try
-	acquisition.control_simple_sync_serial(0,0);
-catch
-	keyboard
-end
 gui.put('capturing',0);
 camera_type=gui.retr('camera_type');
+handles=gui.gethand;
+hgui=getappdata(0,'hgui');
+value=get(handles.ac_config,'value');
+config_string = handles.ac_config.String(value);
+try
+	if ~strcmpi(config_string,'Webcam demo (no synchronizer)')
+		acquisition.control_simple_sync_serial(0,0);
+	end
+catch
+	%keyboard
+end
+%% pco.edge only: display a warning if user selected to stream data to the disk
+% this might skip frames. User should always capture to RAM; then save to disk
+if strcmp(camera_type,'pco_edge26')
+	if get(handles.ac_pivcapture_save,'Value')==1
+		panda_filetype=getappdata(hgui,'panda_filetype');
+		if isempty (panda_filetype)
+			panda_filetype='Single TIFF';
+		end
+		if ~strcmpi(panda_filetype,'Computer RAM -> single TIFF files')
+			ramsave = gui.custom_msgbox('quest',getappdata(0,'hgui'),'Warning',['The data of the pco.edge 26 DS CLHS should be captured to RAM, otherwise frames might be skipped.' newline newline 'How should I proceed with the capture?'],'modal',{'Enable RAM capture','Stream to disk', 'Cancel'},'Stream to disk');
+			if strmatch(ramsave,'Cancel')==1
+				return
+			elseif strmatch(ramsave,'Enable RAM capture')==1
+				setappdata(hgui,'panda_filetype','Computer RAM -> single TIFF files');
+				% capture can continue normally
+			elseif strmatch(ramsave,'Stream to disk')==1
+				%dont change anything
+				% capture can continue normally
+			end
+		end
+	end
+end
+
 required_files_check=1;
-if strcmp(camera_type,'pco_pixelfly') || strcmp(camera_type,'pco_panda') %calib
+if strcmp(camera_type,'pco_pixelfly') || strcmp(camera_type,'pco_panda') || strcmp(camera_type,'pco_edge26') %calib
 	if exist('pco_camera_load_defines.m','file') && exist('pco_recorder.dll','file') %pco.matlab must be installed and permanently added to the search path
 		required_files_check=1;
 	else
@@ -15,9 +44,8 @@ if strcmp(camera_type,'pco_pixelfly') || strcmp(camera_type,'pco_panda') %calib
 	end
 end
 if required_files_check
-	button = questdlg('Arm LASER and camera?','Warning','Yes','Cancel','Yes');
+	button = gui.custom_msgbox('quest',getappdata(0,'hgui'),'Warning','Arm Laser and camera?','modal',{'Yes','Cancel'},'Yes');
 	if strmatch(button,'Yes')==1
-		handles=gui.gethand;
 		gui.put('cancel_capture',0);
 		projectpath=get(handles.ac_project,'String');
 		if get(handles.ac_pivcapture_save,'Value')==1 %check settings only when user wants to save data
@@ -39,9 +67,13 @@ if required_files_check
 		if capture_ok==1
 			gui.put('expected_image_size',[])
 			ac_ROI_general=gui.retr('ac_ROI_general');
+			binning=gui.retr('binning');
+			if isempty(binning)
+				binning=1;
+			end
 			if isempty(ac_ROI_general)
 				max_cam_res=gui.retr('max_cam_res');
-				ac_ROI_general=[1 1 max_cam_res(1) max_cam_res(2)];
+				ac_ROI_general=[1 1 max_cam_res(1)/binning max_cam_res(2)/binning];
 			end
 			gui.put('capturing',1);
 			if isinf(imageamount)
@@ -58,12 +90,10 @@ if required_files_check
 			set(handles.ac_displ_grid,'enable','on');
 			set(handles.ac_displ_hist,'enable','on');
 
-			value=get(handles.ac_config,'value');
 
 			%save capture configuration to mat file
 			if ~isinf(imageamount)
-				config_strings=get(handles.ac_config,'String');
-				config_strings_selected=cell2mat((config_strings(value)));
+				config_strings_selected=cell2mat(config_string);
 				las_percent=str2double(get(handles.ac_power,'String'));
 				pulse_sep=str2double(get(handles.ac_interpuls,'String'));
 				binning=gui.retr('binning');
@@ -112,7 +142,7 @@ if required_files_check
 				end
 			end
 
-			if value== 1 || value == 2 %setups without lD-PS
+			if strcmpi(config_string,'Nd:YAG (SimpleSync) + pco.pixelfly usb') || strcmpi(config_string,'Nd:YAG (SimpleSync) + pco.panda 26 DS') %setups without lD-PS
 				set(handles.ac_power,'enable','on') %here, laser power can be adjusted while it is running.
 			end
 			set(handles.ac_lensctrl,'enable','on')
@@ -141,10 +171,10 @@ if required_files_check
 					end
 				end
 			end
-			if value==1 || value==2 %setup withOUT LD-PS
+			if strcmpi(config_string,'Nd:YAG (SimpleSync) + pco.pixelfly usb') || strcmpi(config_string,'Nd:YAG (SimpleSync) + pco.panda 26 DS') %setup withOUT LD-PS
 				%Start-up sequence for normal Q-Switched laser
 				waitbar(.5,f,'Starting laser...');
-				uiwait(warndlg('Pressing ''OK'' will start the laser.','Laser is armed','modal'))
+				gui.custom_msgbox('quest',getappdata(0,'hgui'),'Laser is armed','Pressing ''OK'' will start the laser.','modal',{'OK'},'OK');
 				acquisition.control_simple_sync_serial(1,0);
 				gui.put('laser_running',1);
 				pause(1)
@@ -157,9 +187,10 @@ if required_files_check
 				waitbar(1,f,'Starting camera...');
 				pause(1)
 				close(f)
-			elseif value == 3 || value == 4 %pco cameras with laser diode
+			elseif strcmpi(config_string,'PIVlab LD-PS + pco.pixelfly usb') || strcmpi(config_string,'PIVlab LD-PS + pco.panda 26 DS')  || strcmpi(config_string,'PIVlab LD-PS + pco.edge 26 DS CLHS') %pco cameras with laser diode
 				%Start-up sequence for PIVlab LD-PS (much quicker)
 				waitbar(.01,f,'Starting laser...');
+				close(f)
 				las_percent=str2double(get(handles.ac_power,'String'));
 				pulse_sep=str2double(get(handles.ac_interpuls,'String'));
 				if strcmpi(gui.retr('sync_type'),'xmSync')
@@ -168,20 +199,15 @@ if required_files_check
 					f1exp_cam =floor(pulse_sep*las_percent/100);
 					gui.put('f1exp_cam',f1exp_cam);
 				end
-				uiwait(warndlg('Pressing ''OK'' will start the laser.','Laser is armed','modal'))
-				acquisition.control_simple_sync_serial(1,0);
-				gui.put('laser_running',1);
-				close(f)
-			elseif value== 5 || value == 6 || value==7 || value==8 || value==9%chronos and basler and flir and OPTOcam and OPTRONIS: Camera needs to be started first, afterwards the laser is enabled.
+				%                gui.custom_msgbox('quest',getappdata(0,'hgui'),'Laser is armed','Pressing ''OK'' will start the laser.','modal',{'OK'},'OK')
+				%                acquisition.control_simple_sync_serial(1,0);
+				%                gui.put('laser_running',1);
+			elseif strcmpi(config_string,'PIVlab LD-PS + Chronos') || strcmpi(config_string,'PIVlab LD-PS + Basler acA2000-165um') || strcmpi(config_string,'PIVlab LD-PS + FLIR FFY-U3-16S2M') || strcmpi(config_string,'PIVlab LD-PS + OPTOcam 2/80') || strcmpi(config_string,'PIVlab LD-PS + OPTRONIS Cyclone') || strcmpi(config_string,'Webcam demo (no synchronizer)')%chronos and basler and flir and OPTOcam and OPTRONIS: Camera needs to be started first, afterwards the laser is enabled.
 				close(f)
 			end
 			camera_type=gui.retr('camera_type');
-			binning=gui.retr('binning');
-			if isempty(binning)
-				binning=1;
-			end
-			value=get(handles.ac_config,'value');
-			if value== 3 || value == 4 %setup with LD-PS and pco
+
+			if strcmpi(config_string,'PIVlab LD-PS + pco.pixelfly usb') || strcmpi(config_string,'PIVlab LD-PS + pco.panda 26 DS') || strcmpi(config_string,'PIVlab LD-PS + pco.edge 26 DS CLHS')  %setup with LD-PS and pco
 				%require a calculation of the exposure time which depends on the laser pulse length
 				las_percent=str2double(get(handles.ac_power,'String'));
 				pulse_sep=str2double(get(handles.ac_interpuls,'String'));
@@ -193,34 +219,34 @@ if required_files_check
 				end
 				disp(['camera exposure time = ' num2str(f1exp_cam)])
 				if f1exp_cam < 6
-					msgbox (['Exposure time of camera too low. Please increase laser energy or pulse distance.' sprintf('\n') 'Pulse_distance[µs] * laser_energy[%] must be >= 6 µs'])
-					uiwait
+					gui.custom_msgbox('warn',getappdata(0,'hgui'),'Exposure too short',['Exposure time of camera too low. Please increase laser energy or pulse distance.' sprintf('\n') 'Pulse_distance[µs] * laser_energy[%] must be >= 6 µs'],'modal');
 				end
 			else
 				f1exp_cam=gui.retr('f1exp_cam');
 			end
-			if value == 5 %chronos
+			if strcmpi(config_string,'PIVlab LD-PS + Chronos') %chronos
 				%capture to camera RAM
 				%zuerst:camera konfigurieren. Dann kamera starten. dann laser. nach laserstart warten und aufnahme beenden.dann laser aus
 				cameraIP=gui.retr('Chronos_IP');
 				acquisition.control_simple_sync_serial(0,0) %stop triggering when already running.
 				[OutputError] = PIVlab_capture_chronos_synced_start(cameraIP,cam_fps); %prepare cam and start camera (waiting for trigger...)
-				uiwait(warndlg('Pressing ''OK'' will start the laser.','Laser is armed','modal'))
+				gui.custom_msgbox('quest',getappdata(0,'hgui'),'Laser is armed','Pressing ''OK'' will start the laser.','modal',{'OK'},'OK');
 				acquisition.control_simple_sync_serial(1,0); gui.put('laser_running',1); %turn on laser
 				[OutputError,ima,frame_nr_display] = PIVlab_capture_chronos_synced_capture(cameraIP,imageamount,cam_fps,do_realtime,ac_ROI_realtime); %capture n images, display livestream
-			elseif value == 1 || value == 2 || value == 3 || value == 4  %pco cameras
-				PIVlab_capture_pco(imageamount,f1exp_cam,'Synchronizer',projectpath,binning,ac_ROI_general,camera_type);
-			elseif value == 6  %basler cameras
+			elseif strcmpi(config_string,'Nd:YAG (SimpleSync) + pco.pixelfly usb') || strcmpi(config_string,'Nd:YAG (SimpleSync) + pco.panda 26 DS') || strcmpi(config_string,'PIVlab LD-PS + pco.pixelfly usb') || strcmpi(config_string,'PIVlab LD-PS + pco.panda 26 DS') || strcmpi(config_string,'PIVlab LD-PS + pco.edge 26 DS CLHS')  %pco cameras
+				PIVlab_capture_pco(imageamount,f1exp_cam,'Synchronizer',projectpath,binning,ac_ROI_general, camera_type);
+				%                PIVlab_capture_pco(imageamount,f1exp_cam,'Synchronizer',projectpath,binning,[ac_ROI_general(1) ac_ROI_general(2) ac_ROI_general(3)/binning ac_ROI_general(4)/binning],camera_type);
+			elseif strcmpi(config_string,'PIVlab LD-PS + Basler acA2000-165um')  %basler cameras
 				[OutputError,basler_vid,frame_nr_display] = PIVlab_capture_basler_synced_start(imageamount,ac_ROI_general); %prepare cam and start camera (waiting for trigger...)
-				uiwait(warndlg('Pressing ''OK'' will start the laser.','Laser is armed','modal'))
+				gui.custom_msgbox('quest',getappdata(0,'hgui'),'Laser is armed','Pressing ''OK'' will start the laser.','modal',{'OK'},'OK');
 				acquisition.control_simple_sync_serial(1,0); gui.put('laser_running',1); %turn on laser
 				[OutputError,basler_vid] = PIVlab_capture_basler_synced_capture(basler_vid,imageamount,do_realtime,ac_ROI_realtime,frame_nr_display); %capture n images, display livestream
-			elseif value == 7  %flir cameras
+			elseif strcmpi(config_string,'PIVlab LD-PS + FLIR FFY-U3-16S2M')  %flir cameras
 				[OutputError,flir_vid,frame_nr_display] = PIVlab_capture_flir_synced_start(imageamount,cam_fps); %prepare cam and start camera (waiting for trigger...)
-				uiwait(warndlg('Pressing ''OK'' will start the laser.','Laser is armed','modal'))
+				gui.custom_msgbox('quest',getappdata(0,'hgui'),'Laser is armed','Pressing ''OK'' will start the laser.','modal',{'OK'},'OK');
 				acquisition.control_simple_sync_serial(1,0); gui.put('laser_running',1); %turn on laser
 				[OutputError,flir_vid] = PIVlab_capture_flir_synced_capture(flir_vid,imageamount,do_realtime,ac_ROI_realtime,frame_nr_display); %capture n images, display livestream
-			elseif value == 8  %OPTOcam
+			elseif strcmpi(config_string,'PIVlab LD-PS + OPTOcam 2/80')  %OPTOcam
 				OPTOcam_bits =gui.retr('OPTOcam_bits');
 				if isempty (OPTOcam_bits)
 					OPTOcam_bits=8;
@@ -240,28 +266,29 @@ if required_files_check
 				if pulse_sep < min_allowed_interframe
 					OPTOcam_settings_check = 0;
 					Error_Reason{end+1,1}='Pulse distance too small for current bit mode.';
-					Error_Reason{end+1,1}=['In ' num2str(OPTOcam_bits) ' bit mode, the puse distance must be at least ' num2str(min_allowed_interframe) ' µs.'];
+					Error_Reason{end+1,1}=['In ' num2str(OPTOcam_bits) ' bit mode, the pulse distance must be at least ' num2str(min_allowed_interframe) ' µs.'];
 					Error_Reason{end+1,1}='Please increase the pulse distance, or decrease the bit mode.';
 				end
 				if OPTOcam_settings_check == 1
-					uiwait(warndlg('Pressing ''OK'' will start the laser.','Laser is armed','modal'))
+					gui.custom_msgbox('quest',getappdata(0,'hgui'),'Laser is armed','Pressing ''OK'' will start the laser.','modal',{'OK'},'OK');
 					acquisition.control_simple_sync_serial(1,0); gui.put('laser_running',1); %turn on laser
 					[OutputError,OPTOcam_vid] = PIVlab_capture_OPTOcam_synced_capture(OPTOcam_vid,imageamount,do_realtime,ac_ROI_realtime,frame_nr_display,OPTOcam_bits); %capture n images, display livestream
 				else
-					msgbox(Error_Reason,'modal')
-					uiwait
+					gui.custom_msgbox('error',getappdata(0,'hgui'),'',Error_Reason,'modal');
 					gui.put('cancel_capture',1);
 					imageamount=inf; %will prevent saving of images
 				end
-			elseif value == 9  %OPTRONIS
+			elseif strcmpi(config_string,'PIVlab LD-PS + OPTRONIS Cyclone')  %OPTRONIS
 				OPTRONIS_bits =gui.retr('OPTRONIS_bits');
 				if isempty (OPTRONIS_bits)
 					OPTRONIS_bits=8;
 				end
 
 				camera_sub_type=gui.retr('camera_sub_type');
+				is_bitflow = endsWith(camera_sub_type, '-bitflow');
+				base_sub_type = strrep(camera_sub_type, '-bitflow', '');
 				if OPTRONIS_bits==8
-					switch camera_sub_type
+					switch base_sub_type
 						case 'Cyclone-2-2000-M'
 							if ~verLessThan('matlab','25')
 								max_fps_with_current_settings = 10000;
@@ -285,7 +312,7 @@ if required_files_check
 					end
 
 				elseif OPTRONIS_bits==10
-					switch camera_sub_type
+					switch base_sub_type
 						case 'Cyclone-2-2000-M'
 							if ~verLessThan('matlab','25')
 								max_fps_with_current_settings = 10000;
@@ -309,69 +336,91 @@ if required_files_check
 					end
 				end
 				OPTRONIS_settings_check = 1;
-                Error_Reason={};
-                if cam_fps > max_fps_with_current_settings
-                    OPTRONIS_settings_check = 0;
-                    Error_Reason{end+1,1}='Frame rate too high for selected bit rate.';
-                    Error_Reason{end+1,1}=['With current settings, sensor max. fps is ' num2str(round(max_fps_with_current_settings,1)) ' fps'];
-                    Error_Reason{end+1,1}='Please select a lower frame rate.';
-                end
-                if OPTRONIS_settings_check == 1
-    				[OutputError,OPTRONIS_vid,frame_nr_display] = PIVlab_capture_OPTRONIS_synced_start(imageamount,ac_ROI_general,cam_fps,OPTRONIS_bits); %prepare cam and start camera (waiting for trigger...)
-    				pause(0.1) %make sure OPTRONIS is ready to capture.
-                    Error_Reason={};
-                end
+				Error_Reason={};
+				if cam_fps > max_fps_with_current_settings
+					OPTRONIS_settings_check = 0;
+					Error_Reason{end+1,1}='Frame rate too high for selected bit rate.';
+					Error_Reason{end+1,1}=['With current settings, sensor max. fps is ' num2str(round(max_fps_with_current_settings,1)) ' fps'];
+					Error_Reason{end+1,1}='Please select a lower frame rate.';
+				end
+				if OPTRONIS_settings_check == 1
+					if is_bitflow
+						[OutputError,OPTRONIS_vid,frame_nr_display] = PIVlab_capture_OPTRONIS_bitflow_synced_start(imageamount,ac_ROI_general,cam_fps,OPTRONIS_bits);
+					else
+						[OutputError,OPTRONIS_vid,frame_nr_display] = PIVlab_capture_OPTRONIS_synced_start(imageamount,ac_ROI_general,cam_fps,OPTRONIS_bits);
+					end %prepare cam and start camera (waiting for trigger...)
+					pause(0.1) %make sure OPTRONIS is ready to capture.
+					Error_Reason={};
+				end
 
-                %2166 mit 8 bit
-                %1750 mit 10 bit
+				%2166 mit 8 bit
+				%1750 mit 10 bit
 
 
-                min_allowed_interframe = gui.retr('min_allowed_interframe');
-                pulse_sep=str2double(get(handles.ac_interpuls,'String'));
-                if OPTRONIS_settings_check == 1
-                    uiwait(warndlg('Pressing ''OK'' will start the laser.','Laser is armed','modal'))
-                    acquisition.control_simple_sync_serial(1,0); gui.put('laser_running',1); %turn on laser
-                    [OutputError,OPTRONIS_vid] = PIVlab_capture_OPTRONIS_synced_capture(OPTRONIS_vid,imageamount,do_realtime,ac_ROI_realtime,frame_nr_display,OPTRONIS_bits); %capture n images, display livestream
-                else
-                    uiwait(msgbox(Error_Reason,'modal'))
-                    gui.put('cancel_capture',1);
-                    imageamount=inf; %will prevent saving of images
-                end
-            end
+				min_allowed_interframe = gui.retr('min_allowed_interframe');
+				pulse_sep=str2double(get(handles.ac_interpuls,'String'));
+				if OPTRONIS_settings_check == 1
+					gui.custom_msgbox('quest',getappdata(0,'hgui'),'Laser is armed','Pressing ''OK'' will start the laser.','modal',{'OK'},'OK');
+					acquisition.control_simple_sync_serial(1,0); gui.put('laser_running',1); %turn on laser
+					if is_bitflow
+						[OutputError,OPTRONIS_vid] = PIVlab_capture_OPTRONIS_bitflow_synced_capture(OPTRONIS_vid,imageamount,do_realtime,ac_ROI_realtime,frame_nr_display,OPTRONIS_bits);
+					else
+						[OutputError,OPTRONIS_vid] = PIVlab_capture_OPTRONIS_synced_capture(OPTRONIS_vid,imageamount,do_realtime,ac_ROI_realtime,frame_nr_display,OPTRONIS_bits);
+					end %capture n images, display livestream
+				else
+					gui.custom_msgbox('error',getappdata(0,'hgui'),'',Error_Reason,'modal');
+					gui.put('cancel_capture',1);
+					imageamount=inf; %will prevent saving of images
+				end
+			elseif strcmpi(config_string,'Webcam demo (no synchronizer)')
+				gui.custom_msgbox('quest',getappdata(0,'hgui'),'Laser is armed (not really, just simulation)','Pressing ''OK'' will start the laser (not really, just simulation).','modal',{'OK'},'OK');
+				[OutputError,frame_nr_display] = PIVlab_capture_webcam_piv_capture(imageamount,projectpath);
+			end
+
 			%disable external devices
 			if (~isempty(gui.retr('ac_enable_seeding1')) && gui.retr('ac_enable_seeding1') ~=0) || (~isempty(gui.retr('ac_enable_device1')) && gui.retr('ac_enable_device1') ~=0) || (~isempty(gui.retr('ac_enable_device2')) && gui.retr('ac_enable_device2') ~=0) || (~isempty(gui.retr('ac_enable_flowlab')) && gui.retr('ac_enable_flowlab') ~=0)
 				acquisition.external_device_control(0); % stops all external devices
 			end
-			acquisition.control_simple_sync_serial(0,0);pause(0.1);acquisition.control_simple_sync_serial(0,0);
-			gui.put('laser_running',0);
-			if value == 5 %chronos
+
+			if ~strcmpi(config_string,'PIVlab LD-PS + pco.pixelfly usb') && ~strcmpi(config_string,'PIVlab LD-PS + pco.panda 26 DS') && ~strcmpi(config_string,'PIVlab LD-PS + pco.edge 26 DS CLHS') &&  ~strcmpi(config_string,'Webcam demo (no synchronizer)') %setup without LD-PS and pco
+				%disable laser after capture for every cam, except pco. Their capture code cannot be split into preparation / capture / save, so the synchronizer commands are inside their capture function.
+				acquisition.control_simple_sync_serial(0,0);pause(0.1);acquisition.control_simple_sync_serial(0,0);
+				gui.put('laser_running',0);
+			end
+
+			if strcmpi(config_string,'PIVlab LD-PS + Chronos') %chronos
 				%when Chronos:save the images when finished recording to camera ram
 				if ~isinf(imageamount) % when the nr. of images is inf, then dont save images. nr of images becomes inf when user selects to not save the images.
 					PIVlab_capture_chronos_save (cameraIP,imageamount,projectpath,frame_nr_display)
 				end
 			end
-			if value == 6 %basler
+			if strcmpi(config_string,'PIVlab LD-PS + Basler acA2000-165um') %basler
 				if ~isinf(imageamount) % when the nr. of images is inf, then dont save images. nr of images becomes inf when user selects to not save the images.
 					[OutputError] = PIVlab_capture_basler_save(basler_vid,imageamount,projectpath,frame_nr_display); %save the images from ram to disk.
 				end
 			end
-			if value == 7 %flir
+			if strcmpi(config_string,'PIVlab LD-PS + FLIR FFY-U3-16S2M') %flir
 				if ~isinf(imageamount) % when the nr. of images is inf, then dont save images. nr of images becomes inf when user selects to not save the images.
 					[OutputError] = PIVlab_capture_flir_save(flir_vid,imageamount,projectpath,frame_nr_display); %save the images from ram to disk.
 				end
 			end
-			if value == 8 %OPTOcam
+			if strcmpi(config_string,'PIVlab LD-PS + OPTOcam 2/80') %OPTOcam
 				if ~isinf(imageamount) % when the nr. of images is inf, then dont save images. nr of images becomes inf when user selects to not save the images.
 					[OutputError,actually_saved_images] = PIVlab_capture_OPTOcam_save(OPTOcam_vid,imageamount,projectpath,frame_nr_display,OPTOcam_bits); %save the images from ram to disk.
-                    imageamount=actually_saved_images;
+					imageamount=actually_saved_images;
 				end
 			end
-			if value == 9 %OPTRONIS
+			if strcmpi(config_string,'PIVlab LD-PS + OPTRONIS Cyclone') %OPTRONIS
 				if ~isinf(imageamount) % when the nr. of images is inf, then dont save images. nr of images becomes inf when user selects to not save the images.
-					[OutputError,actually_saved_images] = PIVlab_capture_OPTRONIS_save(OPTRONIS_vid,imageamount,projectpath,frame_nr_display,OPTRONIS_bits); %save the images from ram to disk.
-                    imageamount=actually_saved_images;
+					if is_bitflow
+						[OutputError,actually_saved_images] = PIVlab_capture_OPTRONIS_bitflow_save(OPTRONIS_vid,imageamount,projectpath,frame_nr_display,OPTRONIS_bits);
+					else
+						[OutputError,actually_saved_images] = PIVlab_capture_OPTRONIS_save(OPTRONIS_vid,imageamount,projectpath,frame_nr_display,OPTRONIS_bits);
+					end %save the images from ram to disk.
+					imageamount=actually_saved_images;
 				end
 			end
+		
 			found_the_data=0;
 			if gui.retr('cancel_capture')==0
 				camera_type=gui.retr('camera_type');
@@ -379,7 +428,6 @@ if required_files_check
 				if found_the_data==1
 					gui.put('sessionpath',projectpath );
 					set(handles.time_inp,'String',num2str(str2num(get(handles.ac_interpuls,'String'))/1000));
-					hgui=getappdata(0,'hgui');
 					serpo=getappdata(hgui,'serpo');
 					export.save_session_function (projectpath,'PIVlab_Capture_Session.mat');
 					gui.put('serpo',serpo); %Serpo gets inaccessible after savesession. Probably because there are a number of variables cleared to allow saving without crashing.
